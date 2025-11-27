@@ -43,6 +43,45 @@ jobs:
           name: playwright-report
           path: playwright-report || ''
 
+  playwright-e2e:
+    name: Playwright E2E (matrix)
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests (smoke)
+        run: npx playwright test tests/playwright/rapports.spec.js --reporter=html
+
+      - name: Upload Playwright Report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.runner }}
+          path: playwright-report || ''
+
   package-windows:
     name: Package Windows
     runs-on: windows-latest

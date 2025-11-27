@@ -6,8 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rapports et Export - Électrification de Masse</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Prefer CDN for performance; when packaging/offline we try local vendor fallback -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.0.3/plotly.min.js"></script>
+    <script>if (typeof Plotly === 'undefined') { var s=document.createElement('script'); s.src='vendor/plotly.min.js'; document.head.appendChild(s); }</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script>if (typeof FontAwesome === 'undefined' && typeof window.FontAwesome === 'undefined') { var s=document.createElement('script'); s.src='vendor/fontawesome.min.js'; document.head.appendChild(s); }</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -34,39 +37,39 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <i class="fas fa-bolt text-2xl mr-3"></i>
+                    <i class="fas fa-bolt text-2xl mr-3" aria-hidden="true"></i>
                     <h1 class="text-xl font-bold">Électrification de Masse</h1>
                 </div>
                 <div class="flex items-center space-x-4">
                     <a href="index.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-tachometer-alt mr-1"></i> Dashboard
+                        <i class="fas fa-tachometer-alt mr-1" aria-hidden="true"></i> Dashboard
                     </a>
                     <a href="parametres.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-cog mr-1"></i> Paramètres
+                        <i class="fas fa-cog mr-1" aria-hidden="true"></i> Paramètres
                     </a>
                     <a href="simulation.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-calculator mr-1"></i> Simulation
+                        <i class="fas fa-calculator mr-1" aria-hidden="true"></i> Simulation
                     </a>
                     <a href="rapports.html" class="px-3 py-2 rounded-md text-sm font-medium bg-white bg-opacity-20">
-                        <i class="fas fa-file-alt mr-1"></i> Rapports
+                        <i class="fas fa-file-alt mr-1" aria-hidden="true"></i> Rapports
                     </a>
                     <a href="terrain.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-map-marker-alt mr-1"></i> Terrain
+                        <i class="fas fa-map-marker-alt mr-1" aria-hidden="true"></i> Terrain
                     </a>
                     <a href="aide.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-question-circle mr-1"></i> Aide
+                        <i class="fas fa-question-circle mr-1" aria-hidden="true"></i> Aide
                     </a>
                     <a href="charges.html"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
-                        <i class="fas fa-coins mr-1"></i> Charges
+                        <i class="fas fa-coins mr-1" aria-hidden="true"></i> Charges
                     </a>
                     <!-- Reset all local data (localStorage + IndexedDB) -->
-                    <button id="clearAllButton" onclick="clearAllData()"
+                    <button id="clearAllButton"
                         class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors bg-red-600 bg-opacity-10 text-red-600"
                         title="Supprimer toutes les données locales">
                         <i class="fas fa-trash-alt mr-1"></i> Réinitialiser données
@@ -354,13 +357,7 @@
     <!-- Simulation Engine -->
     <script src="simulation_engine.js"></script>
     <script src="main.js"></script>
-    <script>
-        // Initialize reports page
-        document.addEventListener('DOMContentLoaded', function () {
-            loadReportData();
-            initializeCharts();
-        });
-    </script>
+    <script src="reports.js"></script>
 </body>
 
 </html>

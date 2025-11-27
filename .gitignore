@@ -1,0 +1,27 @@
+﻿# Node modules
+node_modules/
+
+# Build artifacts
+dist/
+build/
+release/
+
+# Electron build artifacts
+electron/dist/
+*.exe
+*.dll
+*.pdb
+
+# Test and report output
+playwright-report/
+test-results/
+coverage/
+
+# VSCode
+.vscode/
+
+# Misc
+*.zip
+*.log
+.DS_Store
+.env

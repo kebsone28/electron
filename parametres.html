@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paramètres du Projet - Électrification de Masse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card-shadow {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .parameter-group {
+            border-left: 4px solid #667eea;
+        }
+
+        /* Calculator Styles */
+        .zone-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .zone-info {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn-delete {
+            background: #ef4444;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-delete:hover {
+            background: #dc2626;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+        }
+
+        .success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .team-card {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .team-card .label {
+            display: block;
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .team-card .value {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4f46e5;
+        }
+
+        .costs-summary {
+            margin-top: 16px;
+        }
+
+        .cost-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .cost-item.total {
+            background: #f9fafb;
+            border-top: 2px solid #4f46e5;
+            border-bottom: none;
+            margin-top: 8px;
+        }
+
+        .materials-detail {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .materials-detail h5 {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .zones-table {
+            margin-top: 16px;
+            overflow-x: auto;
+        }
+
+        .zones-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .zones-table th,
+        .zones-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .zones-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .section {
+            margin-bottom: 24px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .section h4 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-bolt text-2xl mr-3"></i>
+                    <h1 class="text-xl font-bold">Électrification de Masse</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="index.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-tachometer-alt mr-1"></i> Dashboard
+                    </a>
+                    <a href="parametres.html" class="px-3 py-2 rounded-md text-sm font-medium bg-white bg-opacity-20">
+                        <i class="fas fa-cog mr-1"></i> Paramètres
+                    </a>
+                    <a href="simulation.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-calculator mr-1"></i> Simulation
+                    </a>
+                    <a href="rapports.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-file-alt mr-1"></i> Rapports
+                    </a>
+                    <a href="terrain.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-map-marker-alt mr-1"></i> Terrain
+                    </a>
+                    <a href="aide.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-question-circle mr-1"></i> Aide
+                    </a>
+                    <a href="charges.html"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <i class="fas fa-coins mr-1"></i> Charges
+                    </a>
+                    <!-- Reset all local data (localStorage + IndexedDB) -->
+                    <button id="clearAllButton" onclick="clearAllData()"
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors bg-red-600 bg-opacity-10 text-red-600"
+                        title="Supprimer toutes les données locales">
+                        <i class="fas fa-trash-alt mr-1"></i> Réinitialiser données
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-sliders-h text-indigo-600 mr-3"></i>
+                Paramètres du Projet
+            </h2>
+            <p class="text-gray-600">Configurez tous les paramètres de votre projet d'électrification de masse</p>
+        </div>
+
+        <!-- Save Button -->
+        <div class="mb-6 flex justify-end">
+            <button data-action="save-parameters"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                <i class="fas fa-save mr-2"></i>Enregistrer les Paramètres
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- LEFT COLUMN: Project / Teams / Production -->
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-project-diagram text-blue-600 mr-2"></i> Projet
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre total de ménages</label>
+                            <input type="number" id="totalHouses"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date de début du
+                                    projet</label>
+                                <input type="date" id="projectStartDate"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Distance moyenne entre
+                                    ménages (km)</label>
+                                <input type="number" id="averageDistance"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    step="0.1">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Taux d'imprévus / aléas
+                                (%)</label>
+                            <input type="number" id="unforeseenRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zone Management Section -->
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-map-marked-alt text-purple-600 mr-2"></i> Découpage Géographique / Zones &
+                        Équipes
+                    </h3>
+                    <p class="text-sm text-gray-500 mb-4">Définissez les zones du projet. Le nombre total de ménages et
+                        les équipes
+                        seront calculés automatiquement.</p>
+
+                    <!-- Allocation Mode Toggle -->
+                    <div class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                        <label class="text-sm font-medium text-gray-700">Mode de répartition des équipes :</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="allocationModeToggle" class="sr-only peer">
+                            <div
+                                class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600">
+                            </div>
+                            <span class="ml-3 text-sm font-medium text-gray-900">
+                                <span id="allocationModeLabel">Automatique</span>
+                            </span>
+                        </label>
+                        <span class="text-xs text-gray-500 ml-2">(Auto = calculé automatiquement, Manuel =
+                            saisie par zone)</span>
+                    </div>
+
+                    <div id="zonesContainer" class="space-y-3 mb-4">
+                        <!-- Dynamic Zone Entries will appear here -->
+                    </div>
+
+                    <button id="addZoneBtn"
+                        class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center mb-4">
+                        <i class="fas fa-plus-circle mr-1"></i> Ajouter une zone
+                    </button>
+
+                    <!-- Résumé Total des Équipes -->
+                    <div id="teamsSummary"
+                        class="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                        <h4 class="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+                            <i class="fas fa-users text-blue-600 mr-2"></i>
+                            📊 Résumé Total des Équipes
+                        </h4>
+                        <div id="teamsSummaryContent" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <!-- Will be populated by JavaScript -->
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Préparateurs</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalPrepTeams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Livraison</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalDeliveryTeams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Maçons</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalMasonTeams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Réseau</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalNetworkTeams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Intérieur T1</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalInteriorType1Teams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Intérieur T2</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalInteriorType2Teams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Contrôleurs</div>
+                                <div class="text-lg font-bold text-blue-600" id="totalControllerTeams">0</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded shadow-sm">
+                                <div class="font-medium text-gray-700">Total</div>
+                                <div class="text-lg font-bold text-indigo-600" id="totalAllTeams">0</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-3 italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Ce résumé est calculé automatiquement depuis toutes vos zones
+                        </p>
+                    </div>
+
+                    <!-- Calculateur Intelligent Section -->
+                    <div class="mt-8 pt-6 border-t border-gray-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-magic text-indigo-600 mr-2"></i>
+                            Calculateur Intelligent
+                        </h4>
+
+                        <div id="validationMessage" style="display:none"></div>
+
+                        <div class="flex gap-3 mb-4">
+                            <button id="optimizeConfigBtn"
+                                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-calculator mr-2"></i>
+                                Calculer Configuration Optimisée
+                            </button>
+                            <button id="quickOptimizeBtn"
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Optimisation Rapide">
+                                <i class="fas fa-bolt"></i>
+                            </button>
+                        </div>
+
+                        <div id="calculatorResults" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-tachometer-alt text-purple-600 mr-2"></i> Taux de Production Journalier
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kits préparés par équipe /
+                                jour</label>
+                            <input type="number" id="prepRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" min="1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Ménages livrés par équipe /
+                                jour</label>
+                            <input type="number" id="deliveryRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" min="1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Murs construits par équipe /
+                                jour</label>
+                            <input type="number" id="masonRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" min="1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Raccordements réseau par équipe
+                                / jour</label>
+                            <input type="number" id="networkRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" min="1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Intérieur Type 1 (installations
+                                / équipe / jour)</label>
+                            <input type="number" id="interiorRateType1"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" step="0.1" min="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Intérieur Type 2 (installations
+                                / équipe / jour)</label>
+                            <input type="number" id="interiorRateType2"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" step="0.1" min="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Contrôles / jour par
+                                contrôleur</label>
+                            <input type="number" id="controlRate"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Remuneration / Logistics & Vehicles -->
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-money-bill-wave text-green-600 mr-2"></i> Rémunération & Effectifs (FCFA)
+                    </h3>
+
+                    <!-- SECTION 1: Modes de Paiement -->
+                    <div class="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-hand-holding-usd text-indigo-600 mr-2"></i>
+                            📌 Section 1: Modes de Paiement
+                        </h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Préparateurs</label>
+                                <select id="paymentPrep"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Livraison</label>
+                                <select id="paymentLiv"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Maçons</label>
+                                <select id="paymentMacons"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                    <option value="subcontract">Sous-traitance</option>
+                                </select>
+                            </div>
+                            <div id="masonryModelSelect" style="display:none" class="col-span-2 md:col-span-3">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Modèle de mur
+                                    (sous-traitance)</label>
+                                <select id="masonryModel"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="model1_standard">Mur 1,6m + potelet dessus (45,000 FCFA)</option>
+                                    <option value="model2_chimney">Mur cheminée + potelet dessous (48,000 FCFA)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Réseau</label>
+                                <select id="paymentReseau"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Intérieur Type 1</label>
+                                <select id="paymentInt1"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Intérieur Type 2</label>
+                                <select id="paymentInt2"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Contrôle</label>
+                                <select id="paymentCtrl"
+                                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                    <option value="daily">Salaire journalier</option>
+                                    <option value="per-task">Paiement à la tâche</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Tarifs par Métier (Modifiable) -->
+                    <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-coins text-yellow-600 mr-2"></i>
+                            💰 Section 2: Tarifs par Métier
+                        </h4>
+                        <p class="text-xs text-gray-600 mb-3">Modifiez les tarifs selon vos besoins</p>
+
+                        <!-- Salaires Journaliers -->
+                        <div class="mb-4">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Salaires Journaliers (FCFA/jour)</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Préparateur</label>
+                                    <input type="number" id="prepDailyRate" value="5000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Livreur</label>
+                                    <input type="number" id="deliveryDailyRate" value="6000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Maçon</label>
+                                    <input type="number" id="masonDailyRate" value="8000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Réseau</label>
+                                    <input type="number" id="networkDailyRate" value="10000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Intérieur Type 1</label>
+                                    <input type="number" id="interiorType1DailyRate" value="9000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Intérieur Type 2</label>
+                                    <input type="number" id="interiorType2DailyRate" value="11000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Contrôleur</label>
+                                    <input type="number" id="controllerDailyRate" value="7000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Superviseur</label>
+                                    <input type="number" id="supervisorDailyRate" value="15000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Chauffeur</label>
+                                    <input type="number" id="driverDailyRate" value="6000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Agent Livraison</label>
+                                    <input type="number" id="deliveryAgentDailyRate" value="5500" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Chef de Projet</label>
+                                    <input type="number" id="pmDailyRate" value="50000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarifs Autre Personnel -->
+                        <div class="mt-3 p-3 bg-white rounded border border-gray-200">
+                            <h6 class="text-xs font-medium text-gray-700 mb-2">Autre Personnel (FCFA/jour)</h6>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Logisticien</label>
+                                    <input type="number" id="logisticianDailyRate" value="12000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Comptable</label>
+                                    <input type="number" id="accountantDailyRate" value="15000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Secrétaire</label>
+                                    <input type="number" id="secretaryDailyRate" value="8000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Gardien</label>
+                                    <input type="number" id="guardDailyRate" value="4000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Paiements à la Tâche -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Paiements à la Tâche (FCFA/unité)</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Préparateur (/kit)</label>
+                                    <input type="number" id="prepTaskRate" value="600" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Livreur (/ménage)</label>
+                                    <input type="number" id="deliveryTaskRate" value="800" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Maçon (/mur)</label>
+                                    <input type="number" id="masonTaskRate" value="2500" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Réseau (/raccord)</label>
+                                    <input type="number" id="networkTaskRate" value="2000" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Int. Type 1 (/install)</label>
+                                    <input type="number" id="interiorType1TaskRate" value="1500" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Int. Type 2 (/install)</label>
+                                    <input type="number" id="interiorType2TaskRate" value="2200" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Contrôleur (/contrôle)</label>
+                                    <input type="number" id="controllerTaskRate" value="800" min="0"
+                                        class="w-full px-2 py-1 text-sm border rounded">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: Effectifs Calculés (Lecture Seule) -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-users text-blue-600 mr-2"></i>
+                            👥 Section 3: Effectifs Calculés
+                        </h4>
+                        <p class="text-xs text-gray-600 mb-3 italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Calculés automatiquement depuis vos zones
+                        </p>
+
+                        <!-- Équipes Opérationnelles -->
+                        <div class="mb-3">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Équipes Opérationnelles</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Préparateurs</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffPrepTeams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Livraison</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffDeliveryTeams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Maçons</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffMasonTeams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Réseau</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffNetworkTeams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Int. Type 1</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffInteriorType1Teams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Int. Type 2</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffInteriorType2Teams">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Contrôleurs</div>
+                                    <div class="text-lg font-bold text-blue-600" id="staffControllerTeams">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Personnel Support -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Personnel Support (Auto-calculé)</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600 mb-1">Chef de Projet</div>
+                                    <div class="font-bold text-blue-600">
+                                        <span id="staffPMCount">1</span>
+                                        <span class="text-xs text-gray-500">(Toujours 1)</span>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600 mb-1">Superviseurs</div>
+                                    <div class="font-bold text-blue-600">
+                                        <span id="staffSupervisorCount">0</span>
+                                        <span class="text-xs text-gray-500">(1 pour 10 équipes)</span>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600 mb-1">Agents Livraison</div>
+                                    <div class="font-bold text-blue-600">
+                                        <span id="staffDeliveryAgentCount">0</span>
+                                        <span class="text-xs text-gray-500">(1 pour 500 ménages)</span>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600 mb-1">Chauffeurs</div>
+                                    <div class="font-bold text-blue-600">
+                                        <span id="staffDriverCount">0</span>
+                                        <span class="text-xs text-gray-500">(1 par camion)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Autre Personnel (Extensible) -->
+                            <div class="mt-3 p-3 bg-white rounded border border-gray-200">
+                                <h6 class="text-xs font-medium text-gray-700 mb-2">Autre Personnel (Optionnel)</h6>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Logisticien</label>
+                                        <input type="number" id="logisticianCount" value="0" min="0"
+                                            class="w-full px-2 py-1 text-xs border rounded"
+                                            onchange="updateStaffSummary()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Comptable</label>
+                                        <input type="number" id="accountantCount" value="0" min="0"
+                                            class="w-full px-2 py-1 text-xs border rounded"
+                                            onchange="updateStaffSummary()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Secrétaire</label>
+                                        <input type="number" id="secretaryCount" value="0" min="0"
+                                            class="w-full px-2 py-1 text-xs border rounded"
+                                            onchange="updateStaffSummary()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Gardien</label>
+                                        <input type="number" id="guardCount" value="0" min="0"
+                                            class="w-full px-2 py-1 text-xs border rounded"
+                                            onchange="updateStaffSummary()">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2 italic">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Ajoutez d'autres personnels selon vos besoins
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 4: Estimation Coûts (Lecture Seule) -->
+                    <div class="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-calculator text-green-600 mr-2"></i>
+                            💵 Section 4: Estimation Coûts
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                            <div class="bg-white p-3 rounded text-center">
+                                <div class="text-gray-600 mb-1">Coût Journalier</div>
+                                <div class="text-xl font-bold text-green-600" id="costDaily">0</div>
+                                <div class="text-xs text-gray-500">FCFA/jour</div>
+                            </div>
+                            <div class="bg-white p-3 rounded text-center">
+                                <div class="text-gray-600 mb-1">Coût Mensuel (30j)</div>
+                                <div class="text-xl font-bold text-green-600" id="costMonthly">0</div>
+                                <div class="text-xs text-gray-500">FCFA/mois</div>
+                            </div>
+                            <div class="bg-white p-3 rounded text-center">
+                                <div class="text-gray-600 mb-1">Coût Projet (180j)</div>
+                                <div class="text-xl font-bold text-green-600" id="costProject">0</div>
+                                <div class="text-xs text-gray-500">FCFA total</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-3 italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Estimation basée sur les modes de paiement et tarifs définis
+                        </p>
+                    </div>
+
+                    <!-- Hidden fields for backward compatibility -->
+                    <input type="hidden" id="supervisorCount" value="0">
+                    <input type="hidden" id="deliveryAgentCount" value="0">
+                    <input type="hidden" id="driverCount" value="0">
+                </div>
+
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-truck text-orange-600 mr-2"></i> Coûts & Logistique
+                    </h3>
+
+                    <!-- SECTION 1: Dotations par Rôle -->
+                    <div class="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-boxes text-purple-600 mr-2"></i>
+                            📦 Section 1: Dotations par Rôle
+                        </h4>
+                        <p class="text-xs text-gray-600 mb-3">Définissez les équipements attribués à chaque rôle</p>
+
+                        <!-- Dotations Véhicules -->
+                        <div class="mb-4 p-3 bg-white rounded border">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">🚗 Véhicules</h5>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-2 py-1 text-left">Rôle</th>
+                                            <th class="px-2 py-1 text-left">Type Véhicule</th>
+                                            <th class="px-2 py-1 text-left">Ratio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        <tr>
+                                            <td class="px-2 py-1">Chef de Projet</td>
+                                            <td class="px-2 py-1">
+                                                <select id="dotVehiclePM"
+                                                    class="w-full px-1 py-0.5 text-xs border rounded">
+                                                    <option value="vehicule_leger">Véhicule léger (4x4)</option>
+                                                    <option value="moto">Moto</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-2 py-1">
+                                                <input type="number" id="dotVehiclePMRatio" value="1" min="0" step="0.1"
+                                                    class="w-20 px-1 py-0.5 text-xs border rounded"> /personne
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-2 py-1">Superviseur</td>
+                                            <td class="px-2 py-1">
+                                                <select id="dotVehicleSupervisor"
+                                                    class="w-full px-1 py-0.5 text-xs border rounded">
+                                                    <option value="vehicule_leger">Véhicule léger</option>
+                                                    <option value="moto">Moto</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-2 py-1">
+                                                <input type="number" id="dotVehicleSupervisorRatio" value="1" min="0"
+                                                    step="0.1" class="w-20 px-1 py-0.5 text-xs border rounded">
+                                                /personne
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-2 py-1">Contrôleur</td>
+                                            <td class="px-2 py-1">
+                                                <select id="dotVehicleController"
+                                                    class="w-full px-1 py-0.5 text-xs border rounded">
+                                                    <option value="vehicule_leger">Véhicule léger</option>
+                                                    <option value="moto">Moto</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-2 py-1">
+                                                <input type="number" id="dotVehicleControllerRatio" value="0.5" min="0"
+                                                    step="0.1" class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-2 py-1">Réseau</td>
+                                            <td class="px-2 py-1">
+                                                <select id="dotVehicleNetwork"
+                                                    class="w-full px-1 py-0.5 text-xs border rounded">
+                                                    <option value="moto">Moto</option>
+                                                    <option value="vehicule_leger">Véhicule léger</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-2 py-1">
+                                                <input type="number" id="dotVehicleNetworkRatio" value="1" min="0"
+                                                    step="0.1" class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-2 py-1">Livraison</td>
+                                            <td class="px-2 py-1">
+                                                <select id="dotVehicleDelivery"
+                                                    class="w-full px-1 py-0.5 text-xs border rounded">
+                                                    <option value="camion">Camion</option>
+                                                    <option value="vehicule_leger">Véhicule léger</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-2 py-1">
+                                                <input type="number" id="dotVehicleDeliveryRatio" value="1" min="0"
+                                                    step="0.1" class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Dotations Équipements Métiers -->
+                        <div class="mb-4 p-3 bg-white rounded border">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">🔧 Équipements Métiers</h5>
+                            <div class="space-y-2 text-xs">
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Contrôleur - Kit de contrôle</span>
+                                    <input type="number" id="dotKitController" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Multimètre, Testeur terre, Pince ampèremétrique, Lampe, Appareil photo,
+                                    Tablette
+                                </div>
+
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Électricien Réseau - Kit électricien</span>
+                                    <input type="number" id="dotKitNetwork" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Tournevis isolés, Pinces, Multimètre, Testeur, Échelle 3m, Harnais,
+                                    Casque, Gants, Caisse
+                                </div>
+
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Électricien Intérieur - Kit électricien</span>
+                                    <input type="number" id="dotKitInterior" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Tournevis, Pinces, Multimètre, Perceuse, Niveau, Mètre, Lampe frontale,
+                                    Caisse
+                                </div>
+
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Maçon - Kit outils maçon</span>
+                                    <input type="number" id="dotKitMason" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Truelle, Niveau, Fil à plomb, Mètre, Seau, Taloche, Marteau, Brouette
+                                </div>
+
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Préparateurs - Équipement atelier</span>
+                                    <input type="number" id="dotKitPrep" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Table de travail, Étagères, Chariot
+                                </div>
+
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span class="font-medium">Livraison - Équipement logistique</span>
+                                    <input type="number" id="dotKitDelivery" value="1" min="0" step="0.1"
+                                        class="w-20 px-1 py-0.5 text-xs border rounded"> /équipe
+                                </div>
+                                <div class="text-xs text-gray-500 ml-4">
+                                    Contenu : Diable, Sangles d'arrimage, Bâche protection
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dotations Matériel Bureau -->
+                        <div class="p-3 bg-white rounded border">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">💻 Matériel Bureau</h5>
+                            <div class="space-y-2 text-xs">
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span>Chef de Projet</span>
+                                    <div class="flex gap-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficePMComputer" checked class="mr-1">
+                                            Ordinateur
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficePMPhone" checked class="mr-1"> Téléphone
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficePMPrinter" checked class="mr-1">
+                                            Imprimante
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span>Superviseur</span>
+                                    <div class="flex gap-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeSupervisorPhone" checked class="mr-1">
+                                            Téléphone
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeSupervisorTablet" checked class="mr-1">
+                                            Tablette
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span>Comptable</span>
+                                    <div class="flex gap-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeAccountantComputer" checked
+                                                class="mr-1"> Ordinateur
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeAccountantPrinter" checked class="mr-1">
+                                            Imprimante
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <span>Secrétaire</span>
+                                    <div class="flex gap-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeSecretaryComputer" checked class="mr-1">
+                                            Ordinateur
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dotOfficeSecretaryPhone" checked class="mr-1">
+                                            Téléphone
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Tarifs Dotations -->
+                    <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-tags text-yellow-600 mr-2"></i>
+                            💰 Section 2: Tarifs Dotations
+                        </h4>
+                        <p class="text-xs text-gray-600 mb-3">Définissez les prix d'achat/location pour chaque type
+                            d'équipement</p>
+
+                        <!-- Tarifs Véhicules -->
+                        <div class="mb-4">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Véhicules</h5>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="p-3 bg-white rounded border">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Véhicule léger
+                                        (4x4)</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span class="text-xs text-gray-600">Achat (FCFA)</span>
+                                            <input type="number" id="priceVehicleLegerAchat" value="8000000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-600">Location/jour (FCFA)</span>
+                                            <input type="number" id="priceVehicleLegerLocation" value="25000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-white rounded border">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Camion</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span class="text-xs text-gray-600">Achat (FCFA)</span>
+                                            <input type="number" id="priceCamionAchat" value="15000000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-600">Location/jour (FCFA)</span>
+                                            <input type="number" id="priceCamionLocation" value="40000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-white rounded border">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Moto</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span class="text-xs text-gray-600">Achat (FCFA)</span>
+                                            <input type="number" id="priceMotoAchat" value="800000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-600">Location/jour (FCFA)</span>
+                                            <input type="number" id="priceMotoLocation" value="5000" min="0"
+                                                class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-white rounded border">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Carburant
+                                        (FCFA/litre)</label>
+                                    <input type="number" id="priceFuel" value="650" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                    <div class="mt-2 text-xs text-gray-500">
+                                        <div>Conso. véhicule léger: 15L/jour</div>
+                                        <div>Conso. camion: 25L/jour</div>
+                                        <div>Conso. moto: 5L/jour</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarifs Équipements -->
+                        <div class="mb-4">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Équipements Métiers (Achat unique, FCFA)
+                            </h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div>
+                                    <label class="text-xs text-gray-600">Kit contrôleur</label>
+                                    <input type="number" id="priceKitController" value="250000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Kit élec. réseau</label>
+                                    <input type="number" id="priceKitNetwork" value="200000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Kit élec. intérieur</label>
+                                    <input type="number" id="priceKitInterior" value="180000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Kit maçon</label>
+                                    <input type="number" id="priceKitMason" value="150000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Équip. préparateurs</label>
+                                    <input type="number" id="priceKitPrep" value="300000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Équip. livraison</label>
+                                    <input type="number" id="priceKitDelivery" value="100000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarifs Matériel Bureau -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Matériel Bureau (Achat unique, FCFA)</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div>
+                                    <label class="text-xs text-gray-600">Ordinateur</label>
+                                    <input type="number" id="priceComputer" value="500000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Téléphone</label>
+                                    <input type="number" id="pricePhone" value="100000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Tablette</label>
+                                    <input type="number" id="priceTablet" value="200000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-600">Imprimante</label>
+                                    <input type="number" id="pricePrinter" value="150000" min="0"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode d'acquisition véhicules -->
+                        <div class="mt-4 p-3 bg-white rounded border">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Mode d'acquisition par rôle/personnel
+                            </h5>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Chef de Projet</label>
+                                    <select id="acquisitionModePM" class="w-full px-2 py-1 text-xs border rounded">
+                                        <option value="achat">Achat</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Superviseur</label>
+                                    <select id="acquisitionModeSupervisor"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                        <option value="achat">Achat</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Contrôleur</label>
+                                    <select id="acquisitionModeController"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                        <option value="achat">Achat</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Réseau</label>
+                                    <select id="acquisitionModeNetwork" class="w-full px-2 py-1 text-xs border rounded">
+                                        <option value="achat">Achat</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Livraison</label>
+                                    <select id="acquisitionModeDelivery"
+                                        class="w-full px-2 py-1 text-xs border rounded">
+                                        <option value="achat">Achat</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 italic">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Chaque rôle peut avoir son propre mode d'acquisition
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: Quantités Calculées -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-calculator text-blue-600 mr-2"></i>
+                            📊 Section 3: Quantités Calculées
+                        </h4>
+                        <p class="text-xs text-gray-600 mb-3 italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Calculées automatiquement depuis les effectifs et dotations
+                        </p>
+
+                        <!-- Véhicules nécessaires -->
+                        <div class="mb-3">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Véhicules Nécessaires</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Véhicules légers</div>
+                                    <div class="text-lg font-bold text-blue-600" id="qtyVehiculeLeger">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Camions</div>
+                                    <div class="text-lg font-bold text-blue-600" id="qtyCamion">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded text-center">
+                                    <div class="text-gray-600">Motos</div>
+                                    <div class="text-lg font-bold text-blue-600" id="qtyMoto">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Équipements nécessaires -->
+                        <div class="mb-3">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Équipements Métiers Nécessaires</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Kits contrôleur</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitController">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Kits élec. réseau</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitNetwork">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Kits élec. intérieur</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitInterior">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Kits maçon</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitMason">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Équip. préparateurs</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitPrep">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Équip. livraison</div>
+                                    <div class="font-bold text-blue-600" id="qtyKitDelivery">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Matériel bureau nécessaire -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Matériel Bureau Nécessaire</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Ordinateurs</div>
+                                    <div class="font-bold text-blue-600" id="qtyComputer">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Téléphones</div>
+                                    <div class="font-bold text-blue-600" id="qtyPhone">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Tablettes</div>
+                                    <div class="font-bold text-blue-600" id="qtyTablet">0</div>
+                                </div>
+                                <div class="bg-white p-2 rounded">
+                                    <div class="text-gray-600">Imprimantes</div>
+                                    <div class="font-bold text-blue-600" id="qtyPrinter">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 4: Coûts Logistique -->
+                    <div class="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <h4 class="text-md font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                            💵 Section 4: Coûts Logistique
+                        </h4>
+
+                        <!-- Coûts Véhicules -->
+                        <div class="mb-3">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Coûts Véhicules</h5>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Acquisition</div>
+                                    <div class="text-lg font-bold text-green-600" id="costVehiclesAcquisition">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Carburant (projet)</div>
+                                    <div class="text-lg font-bold text-green-600" id="costFuel">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Total Véhicules</div>
+                                    <div class="text-lg font-bold text-green-600" id="costVehiclesTotal">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Coûts Équipements -->
+                        <div class="mb-3">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Coûts Équipements</h5>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Équip. Métiers</div>
+                                    <div class="text-lg font-bold text-green-600" id="costEquipmentsPro">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Matériel Bureau</div>
+                                    <div class="text-lg font-bold text-green-600" id="costEquipmentsOffice">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                                <div class="bg-white p-3 rounded">
+                                    <div class="text-gray-600 mb-1">Total Équipements</div>
+                                    <div class="text-lg font-bold text-green-600" id="costEquipmentsTotal">0</div>
+                                    <div class="text-xs text-gray-500">FCFA</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Total Logistique -->
+                        <div class="p-4 bg-white rounded border-2 border-green-300">
+                            <div class="text-center">
+                                <div class="text-gray-600 mb-1">TOTAL LOGISTIQUE</div>
+                                <div class="text-3xl font-bold text-green-600" id="costLogisticsTotal">0</div>
+                                <div class="text-sm text-gray-500">FCFA</div>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-gray-600 mt-3 italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Estimation basée sur les dotations, tarifs et effectifs calculés
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Import/Export Section -->
+                <div class="bg-white rounded-lg card-shadow p-6 parameter-group">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-file-import text-blue-600 mr-2"></i> Import / Export
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Importer un fichier
+                                Excel</label>
+                            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                            <p class="text-xs text-gray-500 mt-1">
+                                Formats supportés : .xlsx, .xls, .csv. Les données seront
+                                automatiquement converties si possible.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex items-center space-x-4">
+                        <label class="inline-flex items-center">
+                            <input id="autoRunImport" type="checkbox" class="form-checkbox h-4 w-4 text-indigo-600"
+                                checked />
+                            <span class="ml-2 text-sm text-gray-700">Lancer la simulation automatiquement après
+                                import</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-4 p-4 bg-blue-50 rounded-lg">
+            <div class="flex items-start">
+                <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-3"></i>
+                <div>
+                    <p class="text-sm text-blue-800">
+                        <strong>Conseil :</strong> Les modifications sont sauvegardées automatiquement.
+                        Utilisez le bouton "Configuration Optimisée" pour des paramètres pré-calculés.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <!-- Import Data -->
+        <div class="mt-8 bg-white rounded-lg card-shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fas fa-file-import text-indigo-600 mr-2"></i>
+                Importer Données Terrain & Cartographie Ménages
+            </h3>
+            <p class="text-sm text-gray-600 mb-4">Importez un fichier CSV/JSON contenant les relevés terrain (maisons
+                traitées, murs construits, etc.) et la cartographie des ménages (GeoJSON ou CSV avec lat/lon). Après
+                import, la simulation peut se lancer automatiquement.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fichier cartographie ménages (GeoJSON ou
+                        CSV)</label>
+                    <input type="file" id="householdFileInput"
+                        accept=".geojson,application/geo+json,text/csv,.csv,.json"
+                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700" />
+                    <p class="text-xs text-gray-400 mt-2">Format recommandé: GeoJSON features avec propriétés
+                        (household_id, other props) ou CSV avec colonnes lat,lon,id.</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fichier données terrain (CSV ou
+                        JSON)</label>
+                    <input type="file" id="terrainFileInput" accept="text/csv,application/json,.csv,.json"
+                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700" />
+                    <p class="text-xs text-gray-400 mt-2">Colonnes attendues (CSV):
+                        <code>date,team,housesCount,hoursWorked,status,remarkDescription</code>. Les champs seront
+                        automatiquement convertis si possible.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 flex items-center space-x-4">
+                <label class="inline-flex items-center">
+                    <input id="autoRunImport" type="checkbox" class="form-checkbox h-4 w-4 text-indigo-600" checked />
+                    <span class="ml-2 text-sm text-gray-700">Lancer la simulation automatiquement après import</span>
+                </label>
+
+                <button id="importButton"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-upload mr-2"></i>Importer et Traiter
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-white rounded-lg card-shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fas fa-bolt text-yellow-600 mr-2"></i>
+                Actions Rapides
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button data-action="reset-defaults"
+                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-undo mr-2"></i>Réinitialiser
+                </button>
+                <button id="quickOptimizeBtn" data-action="optimize-parameters" disabled
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-magic mr-2"></i>Configuration Optimisée
+                </button>
+                <button data-action="export-parameters"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-download mr-2"></i>Exporter
+                </button>
+                <button data-action="import-appstate"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-upload mr-2"></i>Importer
+                </button>
+            </div>
+        </div>
+
+        <!-- Message de validation pour Configuration Optimisée -->
+        <div id="validationMessage" style="display: none;" class="mt-6"></div>
+
+        <!-- Résultats de la Configuration Optimisée -->
+        <div id="calculatorResults" style="display: none;" class="mt-6 bg-white rounded-lg card-shadow p-6"></div>
+        <!-- Hidden backup file input -->
+        <input type="file" id="backupFileInput" accept="application/json,.json" style="display:none" />
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="text-sm">© 2024 - Système de Pilotage Électrification de Masse</p>
+                <p class="text-xs text-gray-400 mt-2">Développé pour l'optimisation des projets d'électrification</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="resource_calculator.js"></script>
+    <script src="calculator_ui.js"></script>
+    <script src="simulation_engine.js"></script>
+    <script src="main.js"></script>
+    <script>
+        // Validation en temps réel et auto-save
+        document.addEventListener('DOMContentLoaded', function () {
+            // Load parameters first
+            loadParameters();
+            // Set today's date as default
+            document.getElementById('projectStartDate').valueAsDate = new Date();
+
+            // Vehicle acquisition toggles: show only the relevant price field (achat vs louer)
+            function setVehicleVisibility(selectId, purchaseId, rentId) {
+                const sel = document.getElementById(selectId);
+                const buyInput = document.getElementById(purchaseId);
+                const rentInput = document.getElementById(rentId);
+                if (!sel) return;
+                const update = () => {
+                    const v = sel.value;
+                    if (buyInput) buyInput.style.display = (v === 'acheter') ? '' : 'none';
+                    if (rentInput) rentInput.style.display = (v === 'louer') ? '' : 'none';
+                };
+                sel.addEventListener('change', update);
+                update();
+            }
+
+            // Configure visibility for all vehicle actor blocks
+            setVehicleVisibility('pmVehicleAcquisition', 'pmVehiclePurchaseCost', 'pmVehicleRentPerDay');
+            setVehicleVisibility('controllerVehicleAcquisition', 'controllerVehiclePurchaseCost', 'controllerVehicleRentPerDay');
+            setVehicleVisibility('networkInstallerVehicleAcquisition', 'networkInstallerVehiclePurchaseCost', 'networkInstallerVehicleRentPerDay');
+            setVehicleVisibility('deliveryTruckAcquisition', 'deliveryTruckPurchaseCost', 'deliveryTruckRentPerDay');
+
+            // Validation des champs numériques
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.addEventListener('blur', function () {
+                    const value = parseFloat(this.value);
+                    const min = parseFloat(this.min) || -Infinity;
+                    const max = parseFloat(this.max) || Infinity;
+                    const label = this.previousElementSibling ? this.previousElementSibling.textContent.trim() : this.id;
+
+                    if (isNaN(value) || value < min || value > max) {
+                        this.classList.add('border-red-500');
+                        showNotification(`Valeur invalide pour ${label}`, 'error');
+                    } else {
+                        this.classList.remove('border-red-500');
+                    }
+                });
+            });
+
+            // Confirmation avant réinitialisation
+            document.querySelector('[data-action="reset-defaults"]').addEventListener('click', function (e) {
+                if (!confirm('Êtes-vous sûr de vouloir réinitialiser tous les paramètres ? Cette action est irréversible.')) {
+                    e.preventDefault();
+                }
+            });
+
+            // Sauvegarde automatique en cas de modification
+            let saveTimeout;
+            document.querySelectorAll('input, select').forEach(element => {
+                element.addEventListener('change', function () {
+                    clearTimeout(saveTimeout);
+                    saveTimeout = setTimeout(() => {
+                        if (typeof saveParameters === 'function') {
+                            saveParameters();
+                        }
+                    }, 2000);
+                });
+            });
+
+            // Backup import handler: forward selected file to main.js importer
+            const backupInput = document.getElementById('backupFileInput');
+            if (backupInput) {
+                backupInput.addEventListener('change', function (e) {
+                    const f = this.files && this.files[0];
+                    if (f && typeof importAppStateFile === 'function') {
+                        importAppStateFile(f);
+                    }
+                });
+            }
+        });
+    </script>
+
+    <!-- ========================================
+         NOUVELLE ARCHITECTURE - Modules
+         ======================================== -->
+
+    <!-- 1. Dexie.js (requis) -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+
+    <!-- 2. Shared - Erreurs et constantes -->
+    <script src="src/shared/errors/DomainErrors.js"></script>
+    <script src="src/shared/constants/enums.js"></script>
+
+    <!-- 3. Infrastructure - Base -->
+    <script src="src/infrastructure/events/EventBus.js"></script>
+    <script src="src/infrastructure/logging/Logger.js"></script>
+    <script src="src/infrastructure/errors/ErrorHandler.js"></script>
+    <script src="src/infrastructure/monitoring/MetricsService.js"></script>
+
+    <!-- 4. Domain - Entité de base -->
+    <script src="src/domain/entities/Entity.js"></script>
+
+    <!-- 5. Domain - Value Objects -->
+    <script src="src/domain/value-objects/Location.js"></script>
+    <script src="src/domain/value-objects/Cost.js"></script>
+    <script src="src/domain/value-objects/ProductivityRate.js"></script>
+
+    <!-- 6. Domain - Entités -->
+    <script src="src/domain/entities/Household.js"></script>
+    <script src="src/domain/entities/Team.js"></script>
+    <script src="src/domain/entities/Zone.js"></script>
+    <script src="src/domain/entities/Project.js"></script>
+
+    <!-- 7. Domain - Services -->
+    <script src="src/domain/services/ResourceAllocationService.js"></script>
+    <script src="src/domain/services/CostCalculationService.js"></script>
+    <script src="src/domain/services/SimulationEngine.js"></script>
+    <script src="src/domain/services/OptimizationStrategies.js"></script>
+
+    <!-- 8. Infrastructure - Repositories -->
+    <script src="src/infrastructure/repositories/ProjectRepository.js"></script>
+    <script src="src/infrastructure/repositories/HouseholdRepository.js"></script>
+    <script src="src/infrastructure/repositories/TeamRepository.js"></script>
+    <script src="src/infrastructure/repositories/ZoneRepository.js"></script>
+
+    <!-- 9. Application - Services -->
+    <script src="src/application/services/ProjectService.js"></script>
+    <script src="src/application/services/HouseholdService.js"></script>
+
+    <!-- 10. Application - State Management -->
+    <script src="src/application/state/StoreRegistry.js"></script>
+    <script src="src/application/state/ProjectStore.js"></script>
+
+    <!-- 11. Initialisation -->
+    <script src="src/init.js"></script>
+
+    <!-- Legacy Calculator Scripts -->
+    <script src="resource_calculator.js"></script>
+    <script src="calculator_ui.js"></script>
+
+    <!-- 12. Adaptateur Paramètres -->
+    <script src="src/parametres-adapter.js"></script>
+
+</body>
+
+</html>

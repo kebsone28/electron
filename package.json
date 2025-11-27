@@ -1,0 +1,32 @@
+{
+  "name": "gestion-electrification-massive",
+  "version": "0.1.0",
+  "description": "Application bureau pour pilotage d'électrification de masse",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "package-win": "electron-builder --win --x64",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:smoke": "playwright test tests/playwright/smoke.spec.js",
+    "test:unit": "vitest run tests/unit --reporter dot",
+    "test": "npm run test:unit && npm run test:smoke",
+    "lint": "echo \"Add eslint later\" && exit 0",
+    "format": "echo \"Add prettier later\" && exit 0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.43.0",
+    "vitest": "^4.0.13",
+    "electron": "^39.2.3",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.proquelec.electrification",
+    "files": [
+      "**/*"
+    ],
+    "directories": {
+      "buildResources": "build"
+    }
+  }
+}

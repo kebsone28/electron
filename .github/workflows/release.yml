@@ -1,0 +1,59 @@
+name: Release (build & publish)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-publish:
+    name: Build Windows Installer and Publish
+    runs-on: windows-latest
+    env:
+      # CSC_LINK and CSC_KEY_PASSWORD are used by electron-builder to sign Windows artifacts
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer (electron-builder)
+        run: |
+          echo "Building installer..."
+          npm run package-win
+        # electron-builder will attempt to sign automatically if CSC_LINK/CSC_KEY_PASSWORD are set
+
+      - name: List dist folder
+        run: dir dist || echo 'dist folder not found'
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer(s) to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dist as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-dist
+          path: dist
+
+      - name: Notify (release step finished)
+        run: echo "Windows release created for ${{ github.ref }} — artifacts uploaded"

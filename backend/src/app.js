@@ -98,6 +98,12 @@ app.get('/health', async (req, res) => {
         health.services.database = 'UP';
     } catch (e) {
         health.status = 'PARTIAL';
+        health.services.database = {
+            status: 'DOWN',
+            error: e.message,
+            code: e.code,
+            meta: e.meta
+        };
     }
 
     try {

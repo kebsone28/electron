@@ -10,7 +10,8 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    strictPort: false, // Allow fallback to 3001, 3002... if port is busy
+    strictPort: false,
+    allowedHosts: true,
     proxy: {
       // Proxy all /api calls to the backend → eliminates CORS
       '/api': {
@@ -36,6 +37,7 @@ export default defineConfig({
   },
   preview: {
     port: 4173,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

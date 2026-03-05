@@ -1,0 +1,175 @@
+import prisma from '../../core/utils/prisma.js';
+
+// @desc    Get project KPIs (Snapshot current state)
+// @route   GET /api/kpi/:projectId
+export const getProjectKPIs = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { organizationId } = req.user;
+
+        const project = await prisma.project.findFirst({
+            where: { id: projectId, organizationId }
+        });
+
+        if (!project) {
+            // Return 200 with null metrics to verify project existence without console error noise
+            // This happens for newly created local projects not yet synced
+            return res.status(200).json({
+                projectId,
+                projectName: 'Project pending sync',
+                metrics: null
+            });
+        }
+
+        const households = await prisma.household.findMany({
+            where: { zone: { projectId }, organizationId, deletedAt: null }
+        });
+
+        // --- DEEP KOBO ANALYTICS (Raw SQL for Performance & Granularity) ---
+
+        // 1. Global Totals
+        const koboAggrResult = await prisma.$queryRaw`
+            SELECT 
+                SUM(COALESCE(NULLIF("koboData"->'group_ed3yt17'->>'Nombre_de_KIT_pr_par', '')::numeric, 0)) as kit_prepared,
+                SUM(COALESCE(NULLIF("koboData"->'group_ed3yt17'->>'Nombre_de_KIT_Charg_pour_livraison', '')::numeric, 0)) as kit_loaded,
+                SUM(COALESCE(NULLIF("koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Cable_2_5mm_Int_rieure', '')::numeric, 0)) as cable_2_5,
+                SUM(COALESCE(NULLIF("koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Cable_1_5mm_Int_rieure', '')::numeric, 0)) as cable_1_5,
+                SUM(COALESCE(NULLIF("koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Tranch_e_Cable_arm_4mm', '')::numeric, 0)) as cable_4_armed,
+                SUM(COALESCE(NULLIF("koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Tranch_e_C_ble_arm_1_5mm', '')::numeric, 0)) as cable_1_5_armed,
+                COUNT(DISTINCT "koboData"->>'today') as days_worked,
+                COUNT(*) filter (where status = 'Terminé' OR status = 'Réception: Validée') as total_validated
+            FROM "Household" h
+            JOIN "Zone" z ON h."zoneId" = z.id
+            WHERE z."projectId" = ${projectId} AND h."organizationId" = ${organizationId} AND h."deletedAt" IS NULL
+        `;
+
+        // 2. Stats by Zone
+        const zoneStats = await prisma.$queryRaw`
+            SELECT 
+                z.name as zone_name,
+                COUNT(*) as total,
+                COUNT(*) filter (where h.status = 'Terminé' OR h.status = 'Réception: Validée') as done,
+                SUM(COALESCE(NULLIF(h."koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Cable_2_5mm_Int_rieure', '')::numeric, 0) +
+                    COALESCE(NULLIF(h."koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Cable_1_5mm_Int_rieure', '')::numeric, 0) +
+                    COALESCE(NULLIF(h."koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Tranch_e_Cable_arm_4mm', '')::numeric, 0) +
+                    COALESCE(NULLIF(h."koboData"->'group_wu8kv54'->'group_sy9vj14'->>'Longueur_Tranch_e_C_ble_arm_1_5mm', '')::numeric, 0)) as cable_total
+            FROM "Household" h
+            JOIN "Zone" z ON h."zoneId" = z.id
+            WHERE z."projectId" = ${projectId} AND h."organizationId" = ${organizationId} AND h."deletedAt" IS NULL
+            GROUP BY z.id, z.name
+        `;
+
+        // 3. Stats by Team (using koboData.username as proxy)
+        const teamStats = await prisma.$queryRaw`
+            SELECT 
+                COALESCE(h."koboData"->>'username', 'Inconnu') as team_name,
+                COUNT(*) filter (where h.status = 'Terminé' OR h.status = 'Réception: Validée') as done,
+                COUNT(DISTINCT h."koboData"->>'today') as days_active,
+                SUM(COALESCE(NULLIF(h."koboData"->'group_ed3yt17'->>'Nombre_de_KIT_pr_par', '')::numeric, 0)) as prepared
+            FROM "Household" h
+            JOIN "Zone" z ON h."zoneId" = z.id
+            WHERE z."projectId" = ${projectId} AND h."organizationId" = ${organizationId} AND h."deletedAt" IS NULL
+            GROUP BY h."koboData"->>'username'
+        `;
+
+        const aggr = koboAggrResult[0] || {};
+        const daysWorked = Number(aggr.days_worked || 1);
+        const totalValidated = Number(aggr.total_validated || 0);
+        const totalHouseholds = households.length;
+        const totalCable = Number(aggr.cable_2_5 || 0) + Number(aggr.cable_1_5 || 0) + Number(aggr.cable_4_armed || 0) + Number(aggr.cable_1_5_armed || 0);
+
+        const murCount = households.filter(h => h.status === 'Murs').length;
+        const reseauCount = households.filter(h => h.status === 'Réseau').length;
+        const interieurCount = households.filter(h => h.status === 'Intérieur').length;
+        const problemCount = households.filter(h => h.status === 'Problème' || h.status === 'Inéligible').length;
+
+        const igppRaw = totalHouseholds > 0 ? (
+            (totalValidated * 1.0) + (interieurCount * 0.75) + (reseauCount * 0.45) + (murCount * 0.2)
+        ) / (totalHouseholds - problemCount || 1) * 100 : 0;
+
+        res.json({
+            projectId,
+            projectName: project.name,
+            timestamp: new Date().toISOString(),
+            metrics: {
+                totalHouseholds,
+                electrifiedHouseholds: totalValidated,
+                progressPercent: totalHouseholds > 0 ? Math.round((totalValidated / (totalHouseholds - problemCount || 1)) * 100) : 0,
+                igppScore: Math.min(100, Math.round(igppRaw * 10) / 10),
+                performance: {
+                    daysWorked,
+                    avgPerDay: Math.round((totalValidated / daysWorked) * 10) / 10,
+                    avgCablePerHouse: totalValidated > 0 ? Math.round((totalCable / totalValidated) * 10) / 10 : 0,
+                },
+                technical: {
+                    cable25: Number(aggr.cable_2_5 || 0),
+                    cable15: Number(aggr.cable_1_5 || 0),
+                    cable4Armed: Number(aggr.cable_4_armed || 0),
+                    cable15Armed: Number(aggr.cable_1_5_armed || 0),
+                    totalConsumption: totalCable
+                },
+                logistics: {
+                    kitPrepared: Number(aggr.kit_prepared || 0),
+                    kitLoaded: Number(aggr.kit_loaded || 0),
+                    gap: Number(aggr.kit_prepared || 0) - Number(aggr.kit_loaded || 0)
+                },
+                // Drill-down data
+                breakdown: {
+                    byZone: zoneStats.map((z) => {
+                        const total = Number(z.total);
+                        const done = Number(z.done);
+                        return {
+                            name: z.zone_name,
+                            total,
+                            done,
+                            cable: Number(z.cable_total),
+                            progress: total > 0 ? Math.round((done / total) * 100) : 0
+                        };
+                    }),
+                    byTeam: teamStats.map((t) => {
+                        const days = Number(t.days_active);
+                        const done = Number(t.done);
+                        return {
+                            worker: t.team_name,
+                            done,
+                            days,
+                            yield: days > 0 ? Math.round((done / days) * 10) / 10 : 0
+                        };
+                    })
+                }
+            }
+        });
+    } catch (error) {
+        console.error('KPI calculation error:', error);
+        res.status(500).json({ error: 'Server error while calculating KPIs' });
+    }
+};
+
+// @desc    Get global organization summary
+// @route   GET /api/kpi/summary
+export const getGlobalSummary = async (req, res) => {
+    try {
+        const { organizationId } = req.user;
+
+        const projects = await prisma.project.findMany({
+            where: { organizationId, deletedAt: null },
+            select: { id: true, name: true, status: true }
+        });
+
+        const stats = await prisma.household.groupBy({
+            by: ['status'],
+            where: { organizationId, deletedAt: null },
+            _count: true
+        });
+
+        res.json({
+            organizationId,
+            projectCount: projects.length,
+            statusDistribution: stats,
+            projects
+        });
+    } catch (error) {
+        console.error('Global summary error:', error);
+        res.status(500).json({ error: 'Server error while fetching global summary' });
+    }
+};

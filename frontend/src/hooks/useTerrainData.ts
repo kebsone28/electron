@@ -1,56 +1,122 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../store/db';
 import type { Household } from '../utils/types';
+import { useProject } from './useProject';
 
 export function useTerrainData() {
+    const { activeProjectId } = useProject();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
 
     const households = useLiveQuery(async () => {
-        let collection = db.households.toCollection();
+        if (!activeProjectId) return [];
+
+        let collection = db.households.where('projectId').equals(activeProjectId);
         const all = await collection.toArray();
 
         return all.filter(h => {
             const matchesSearch = searchTerm === '' ||
                 h.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (h as any).name?.toLowerCase().includes(searchTerm.toLowerCase());
+                (h as any).owner?.toLowerCase().includes(searchTerm.toLowerCase());
 
             const matchesStatus = statusFilter === 'all' || h.status === statusFilter;
             return matchesSearch && matchesStatus;
         });
-    }, [searchTerm, statusFilter]);
+    }, [activeProjectId, searchTerm, statusFilter]);
 
     const stats = useMemo(() => {
         if (!households) return null;
+
+        const total = households.length;
+        let enAttente = 0;
+        let enCours = 0;
+        let termine = 0;
+        let bloque = 0;
+        const teamCounts = { livraison: 0, maconnerie: 0, reseau: 0, installation: 0, controle: 0 };
+
+        households.forEach(h => {
+            // Status counts
+            if (h.status === 'En attente' || h.status === 'Attente démarrage') enAttente++;
+            else if (['En cours', 'Travaux', 'Attente Maçon', 'Attente Branchement', 'Attente électricien'].includes(h.status)) enCours++;
+            else if (h.status === 'Terminé' || h.status === 'Conforme') termine++;
+            else if (h.status === 'Inéligible' || h.status === 'Injoignable') bloque++;
+
+            // Team counts
+            if (h.koboSync?.livreurDate) teamCounts.livraison++;
+            if (h.koboSync?.maconOk) teamCounts.maconnerie++;
+            if (h.koboSync?.reseauOk) teamCounts.reseau++;
+            if (h.koboSync?.interieurOk) teamCounts.installation++;
+            if (h.koboSync?.controleOk) teamCounts.controle++;
+        });
+
         return {
-            total: households.length,
-            enAttente: households.filter(h => h.status === 'En attente' || h.status === 'Attente démarrage').length,
-            enCours: households.filter(h => ['En cours', 'Travaux', 'Attente Maçon', 'Attente Branchement', 'Attente électricien'].includes(h.status)).length,
-            termine: households.filter(h => h.status === 'Terminé' || h.status === 'Conforme').length,
-            bloque: households.filter(h => h.status === 'Inéligible' || h.status === 'Injoignable').length
+            total,
+            enAttente,
+            enCours,
+            termine,
+            bloque,
+            teamProgress: {
+                livraison: total > 0 ? Math.round((teamCounts.livraison / total) * 100) : 0,
+                maconnerie: total > 0 ? Math.round((teamCounts.maconnerie / total) * 100) : 0,
+                reseau: total > 0 ? Math.round((teamCounts.reseau / total) * 100) : 0,
+                installation: total > 0 ? Math.round((teamCounts.installation / total) * 100) : 0,
+                controle: total > 0 ? Math.round((teamCounts.controle / total) * 100) : 0
+            }
         };
     }, [households]);
 
-    const updateHouseholdStatus = async (id: string, newStatus: string) => {
+    const updateHouseholdStatus = useCallback(async (id: string, newStatus: string) => {
+        const household = await db.households.get(id);
+        if (!household) return;
+
+        const oldStatus = household.status;
         await db.households.update(id, { status: newStatus });
-    };
 
-    const importHouseholds = async (data: Household[]) => {
+        // Logic: Deduction from stock if finished
+        if (newStatus === 'Terminé' && oldStatus !== 'Terminé' && activeProjectId) {
+            // Find kit items
+            const kitItems = await (db as any).inventory
+                .where('projectId').equals(activeProjectId)
+                .toArray();
+
+            for (const item of kitItems) {
+                // Deduct 1 unit for key items
+                if (item.stock > 0) {
+                    await (db as any).inventory.update(item.id, {
+                        stock: item.stock - 1
+                    });
+
+                    // Log an expense
+                    await (db as any).expenses.add({
+                        id: `exp_${Date.now()}_${item.id}`,
+                        projectId: activeProjectId,
+                        category: 'Materiel',
+                        name: `Installation Kit - ${item.name}`,
+                        amount: item.unitPrice || 0,
+                        date: new Date().toISOString(),
+                        householdId: id
+                    });
+                }
+            }
+        }
+    }, [activeProjectId]);
+
+    const importHouseholds = useCallback(async (data: Household[]) => {
         await db.households.bulkPut(data);
-    };
+    }, []);
 
-    const clearHouseholds = async () => {
+    const clearHouseholds = useCallback(async () => {
         await db.households.clear();
-    };
+    }, []);
 
-    const simulateKoboSync = async () => {
+    const simulateKoboSync = useCallback(async () => {
         const all = await db.households.toArray();
         const updates = all.map(h => {
             // Simulate random Kobo progress
             const rand = Math.random();
             const isStarted = rand > 0.3; // 70% started
-            let koboSync: any = {};
+            let koboData: any = {};
             let newStatus = h.status || 'Non débuté';
 
             if (isStarted) {
@@ -58,7 +124,7 @@ export function useTerrainData() {
                 const phaseIndex = Math.floor(Math.random() * phases.length);
                 const currentPhase = phases[phaseIndex];
 
-                koboSync = {
+                koboData = {
                     preparateurKits: 1,
                     livreurDate: new Date().toISOString(),
                     maconOk: phaseIndex >= 0,
@@ -74,10 +140,19 @@ export function useTerrainData() {
                 if (Math.random() > 0.9) newStatus = 'Problème';
             }
 
-            return { ...h, status: newStatus, koboSync };
+            return { ...h, status: newStatus, koboData };
         });
 
         await db.households.bulkPut(updates);
+    }, []);
+
+    const getHouseholdLogs = async (id: string) => {
+        return await db.sync_logs
+            .filter(log =>
+                log.action.includes(id) ||
+                (log.details && JSON.stringify(log.details).includes(id))
+            )
+            .toArray();
     };
 
     return {
@@ -90,6 +165,7 @@ export function useTerrainData() {
         updateHouseholdStatus,
         importHouseholds,
         clearHouseholds,
-        simulateKoboSync
+        simulateKoboSync,
+        getHouseholdLogs
     };
 }

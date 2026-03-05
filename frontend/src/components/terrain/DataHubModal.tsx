@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X,
@@ -12,7 +12,11 @@ import {
     History
 } from 'lucide-react';
 import { useTerrainData } from '../../hooks/useTerrainData';
+import { useSync } from '../../hooks/useSync';
 import { useTheme } from '../../context/ThemeContext';
+import { useProject } from '../../hooks/useProject';
+import { useAuth } from '../../contexts/AuthContext';
+import apiClient from '../../api/client';
 
 interface DataHubModalProps {
     isOpen: boolean;
@@ -21,14 +25,25 @@ interface DataHubModalProps {
 
 export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) => {
     const { isDarkMode } = useTheme();
+    const { user } = useAuth();
     const { importHouseholds, clearHouseholds, stats, simulateKoboSync } = useTerrainData();
+    const { activeProjectId, project, createProject } = useProject();
     const [activeTab, setActiveTab] = useState<'import' | 'kobo' | 'backups' | 'danger'>('import');
     const [isProcessing, setIsProcessing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const { sync } = useSync();
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        if (!activeProjectId) {
+            const name = prompt("Veuillez donner un nom à ce nouveau projet avant d'importer :");
+            if (!name) return;
+            const newProj = await createProject(name);
+            if (!newProj) return;
+        }
 
         setIsProcessing(true);
         try {
@@ -88,10 +103,34 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
             const parseFloatSafe = (val: any) => {
                 if (!val && val !== 0) return 0;
                 if (typeof val === 'number') return val;
-                // Replace comma with dot for french locale numbers
                 const parsed = parseFloat(String(val).replace(',', '.'));
                 return isNaN(parsed) ? 0 : parsed;
             };
+
+            const currentProjectId = activeProjectId || project?.id;
+            const currentOrgId = project?.organizationId || user?.organization || 'org_test_2026';
+
+            if (!currentProjectId) throw new Error("Aucun projet actif pour l'import");
+
+            // 1. Ensure we have at least one zone for this project
+            let targetZoneId = '';
+            try {
+                const zonesRes = await apiClient.get(`/zones?projectId=${currentProjectId}`);
+                const zones = zonesRes.data.zones;
+                if (zones && zones.length > 0) {
+                    targetZoneId = zones[0].id;
+                } else {
+                    // Create a default zone
+                    const newZoneRes = await apiClient.post('/zones', {
+                        projectId: currentProjectId,
+                        name: 'Zone Importée'
+                    });
+                    targetZoneId = newZoneRes.data.id;
+                }
+            } catch (zErr) {
+                console.warn("Could not fetch/create zone, creating a local placeholder", zErr);
+                targetZoneId = `zone_${Date.now()}`;
+            }
 
             const parsedHouseholds = rawData.map((household: any) => {
                 const hId = findValue(household, aliases.id);
@@ -105,24 +144,37 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                     const lon = parseFloatSafe(findValue(household, aliases.lon));
 
                     return {
-                        ...household, // keep original data just in case
                         id: String(hId).trim(),
+                        projectId: currentProjectId,
+                        zoneId: targetZoneId, // CRITICAL: Link to zone
+                        organizationId: currentOrgId,
                         owner: String(owner).trim(),
                         photo: String(photo).trim(),
                         phone: String(phone).trim(),
                         region: String(region).trim(),
                         location: {
-                            type: 'Point',
-                            coordinates: [lon, lat]
+                            type: 'Point' as const,
+                            coordinates: [lon, lat] as [number, number]
                         },
-                        status: String(status).trim()
+                        status: String(status).trim(),
+                        version: 1,
+                        updatedAt: new Date().toISOString()
                     };
                 }
                 return null;
             }).filter(h => h !== null);
 
-            await importHouseholds(parsedHouseholds);
-            alert(`Import réussi : ${parsedHouseholds.length} ménages ajoutés/mis à jour.`);
+            console.log(`[IMPORT] Importing ${parsedHouseholds.length} households to zone ${targetZoneId}`);
+            await importHouseholds(parsedHouseholds as any);
+
+            // Auto-push to server
+            try {
+                await sync();
+            } catch (e) {
+                console.warn("Local import ok, but server sync failed", e);
+            }
+
+            alert(`Import réussi pour le projet "${project?.name || 'Nouveau'}": ${parsedHouseholds.length} ménages ajoutés.`);
         } catch (err) {
             console.error("Erreur d'import", err);
             alert("Erreur lors de l'import : Vérifiez le format du fichier (CSV ou Excel attendu).");
@@ -132,14 +184,22 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
         }
     };
 
+    // Supprimé: handleCreateProject n'est plus utilisé ici (géré par AdminUsers)
     const handleKoboSync = async () => {
         setIsProcessing(true);
         try {
-            await simulateKoboSync();
-            alert("Synchronisation Kobo réussie. Les ménages ont été mis à jour.");
+            // Real Server Sync
+            try {
+                await sync();
+                alert("Synchronisation avec le serveur réussie.");
+            } catch (serverErr) {
+                // Simulation fallback if no server
+                await simulateKoboSync();
+                alert("Mode Simulation : Serveur injoignable, synchronisation locale uniquement.");
+            }
         } catch (e) {
             console.error(e);
-            alert("Erreur lors de la synchronisation.");
+            alert("Erreur critique lors de la synchronisation.");
         } finally {
             setIsProcessing(false);
         }
@@ -176,7 +236,7 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                                 <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Synchronisation, Imports & Sauvegardes</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
+                        <button onClick={onClose} title="Fermer" aria-label="Fermer" className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
                             <X size={24} />
                         </button>
                     </div>
@@ -186,18 +246,21 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                         <div className={`w-64 p-4 border-r shrink-0 space-y-2 overflow-y-auto ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50/50'}`}>
                             <button
                                 onClick={() => setActiveTab('import')}
+                                title="Importer un fichier Excel ou CSV"
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'import' ? 'bg-indigo-600 text-white shadow-md' : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-200'}`}
                             >
                                 <Upload size={18} /> Import Fichier
                             </button>
                             <button
                                 onClick={() => setActiveTab('kobo')}
+                                title="Synchroniser avec KoboToolbox"
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'kobo' ? 'bg-indigo-600 text-white shadow-md' : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-200'}`}
                             >
                                 <RefreshCcw size={18} /> Synchronisation Kobo
                             </button>
                             <button
                                 onClick={() => setActiveTab('backups')}
+                                title="Voir les sauvegardes historiques"
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'backups' ? 'bg-indigo-600 text-white shadow-md' : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-200'}`}
                             >
                                 <History size={18} /> Sauvegardes
@@ -205,6 +268,7 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                             <div className={`my-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`} />
                             <button
                                 onClick={() => setActiveTab('danger')}
+                                title="Accéder aux options de suppression et données sensibles"
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'danger' ? 'bg-rose-600 text-white shadow-md' : isDarkMode ? 'text-rose-500/70 hover:bg-rose-500/10 hover:text-rose-400' : 'text-rose-600/70 hover:bg-rose-50'}`}
                             >
                                 <AlertTriangle size={18} /> Zone de Danger
@@ -233,11 +297,14 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                                                 accept=".csv, .xlsx, .xls"
                                                 className="hidden"
                                                 ref={fileInputRef}
+                                                title="Choisir un fichier Excel ou CSV"
+                                                aria-label="Choisir un fichier Excel ou CSV"
                                                 onChange={handleFileUpload}
                                             />
                                             <button
                                                 onClick={() => fileInputRef.current?.click()}
                                                 disabled={isProcessing}
+                                                title="Parcourir vos fichiers"
                                                 className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-lg shadow-indigo-600/20"
                                             >
                                                 {isProcessing ? 'Traitement...' : 'Sélectionner un fichier'}

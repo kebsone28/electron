@@ -30,7 +30,7 @@ export default function StockTab() {
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
+                <div className="card p-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
                         <Layers size={80} className="text-blue-500" />
                     </div>
@@ -42,7 +42,7 @@ export default function StockTab() {
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
+                <div className="card p-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
                         <Box size={80} className="text-emerald-500" />
                     </div>
@@ -54,7 +54,7 @@ export default function StockTab() {
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
+                <div className="card p-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
                         <AlertCircle size={80} className="text-amber-500" />
                     </div>
@@ -75,34 +75,34 @@ export default function StockTab() {
                 {categoriesMap.map((cat) => {
                     const style = CATEGORY_COLORS[cat.name] || { bg: 'bg-slate-800/50', border: 'border-slate-800', text: 'text-slate-400' };
                     return (
-                        <div key={cat.name} className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                        <div key={cat.name} className="card overflow-hidden">
                             <div className={`p-4 ${style.bg} border-b ${style.border}`}>
                                 <h3 className={`text-sm font-bold uppercase tracking-widest ${style.text}`}>{cat.name}</h3>
                             </div>
-                            <div className="p-0">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-slate-950/50 border-b border-slate-800">
+                            <div className="p-0 overflow-x-auto">
+                                <table className="data-table">
+                                    <thead>
                                         <tr>
-                                            <th className="text-left px-6 py-3 text-xs font-bold text-slate-500 uppercase">Article</th>
-                                            <th className="text-center px-4 py-3 text-xs font-bold text-slate-500 uppercase">Qté/Kit</th>
-                                            <th className="text-right px-6 py-3 text-xs font-bold text-slate-500 uppercase">Stock Total</th>
+                                            <th>Article</th>
+                                            <th className="text-center">Qté/Kit</th>
+                                            <th className="text-right">Stock Total</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-800/50">
+                                    <tbody>
                                         {cat.items.map((item) => (
-                                            <tr key={item.id} className="hover:bg-slate-800/50 transition-colors group">
-                                                <td className="px-6 py-4">
+                                            <tr key={item.id}>
+                                                <td>
                                                     <div className="flex flex-col">
-                                                        <span className="text-white font-medium">{item.label}</span>
-                                                        <span className="text-[10px] text-slate-500 font-mono">{item.unit}</span>
+                                                        <span className="font-medium">{item.label}</span>
+                                                        <span className="text-[10px] opacity-70 font-mono">{item.unit}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-4 text-center font-mono text-slate-400">
+                                                <td className="text-center font-mono opacity-80">
                                                     {item.qty}
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
+                                                <td className="text-right">
                                                     <div className="flex flex-col items-end">
-                                                        <span className={`text-lg font-black ${item.hasOverride ? 'text-amber-400' : 'text-slate-200'}`}>
+                                                        <span className={`text-lg font-black ${item.hasOverride ? 'text-warning' : ''}`}>
                                                             {fmtNum(Math.round(item.current))}
                                                         </span>
                                                         {item.hasOverride && (

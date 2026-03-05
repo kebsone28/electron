@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { useFinances } from '../../hooks/useFinances';
 import { useTheme } from '../../context/ThemeContext';
-
-const formatFCFA = (val: number) => new Intl.NumberFormat('fr-FR').format(Math.round(val)) + ' F';
+import { fmtFCFA } from '../../utils/format';
 
 export default function DevisVsReel() {
     const { devis, updateRealCost, updatePlannedCost } = useFinances();
@@ -35,7 +34,7 @@ export default function DevisVsReel() {
                             <span className={`text-[9px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Marge Globale</span>
                             <div className="flex items-center gap-2">
                                 <span className={`text-xl font-black ${devis.globalMargin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {formatFCFA(devis.globalMargin)}
+                                    {fmtFCFA(devis.globalMargin)}
                                 </span>
                                 {devis.globalMargin >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-rose-500" />}
                             </div>
@@ -143,7 +142,7 @@ export default function DevisVsReel() {
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex flex-col items-end gap-1">
                                                 <span className={`text-[13px] font-black tracking-tighter ${item.margin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {formatFCFA(item.margin)}
+                                                    {fmtFCFA(item.margin)}
                                                 </span>
                                                 <div className="flex items-center gap-1">
                                                     {item.margin >= 0 ?
@@ -163,12 +162,12 @@ export default function DevisVsReel() {
                         <tfoot className={`border-t-2 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
                             <tr className="font-black">
                                 <td className={`px-8 py-8 tracking-widest text-[9px] uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>TOTAUX CONSOLIDÉS</td>
-                                <td colSpan={2} className={`px-6 py-8 text-right border-r text-lg tabular-nums tracking-tighter transition-all ${isDarkMode ? 'text-indigo-400 bg-indigo-500/10 border-slate-800' : 'text-indigo-600 bg-indigo-50/30 border-slate-100'}`}>{formatFCFA(devis.totalPlanned)}</td>
-                                <td colSpan={2} className={`px-6 py-8 text-right border-r text-lg tabular-nums tracking-tighter transition-all ${isDarkMode ? 'text-white bg-indigo-500/10 border-slate-800' : 'text-slate-900 bg-indigo-50/50 border-slate-100'}`}>{formatFCFA(devis.totalReal)}</td>
+                                <td colSpan={2} className={`px-6 py-8 text-right border-r text-lg tabular-nums tracking-tighter transition-all ${isDarkMode ? 'text-indigo-400 bg-indigo-500/10 border-slate-800' : 'text-indigo-600 bg-indigo-50/30 border-slate-100'}`}>{fmtFCFA(devis.totalPlanned)}</td>
+                                <td colSpan={2} className={`px-6 py-8 text-right border-r text-lg tabular-nums tracking-tighter transition-all ${isDarkMode ? 'text-white bg-indigo-500/10 border-slate-800' : 'text-slate-900 bg-indigo-50/50 border-slate-100'}`}>{fmtFCFA(devis.totalReal)}</td>
                                 <td className="px-8 py-8 text-right">
                                     <div className="flex flex-col items-end">
                                         <span className={`text-3xl font-black tracking-tighter ${devis.globalMargin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {formatFCFA(devis.globalMargin)}
+                                            {fmtFCFA(devis.globalMargin)}
                                         </span>
                                         <span className={`text-[9px] font-black uppercase tracking-[0.2em] mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Marge Reliquat</span>
                                     </div>

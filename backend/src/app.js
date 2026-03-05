@@ -17,15 +17,15 @@ app.use(cors({
 }));
 
 // 2. Request Parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(compression());
 
 // 3. Rate Limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    max: 1000 // Increased for testing and map tile heavy sessions
 });
 app.use('/api/', limiter);
 
@@ -34,12 +34,22 @@ if (config.env === 'development') {
     app.use(morgan('dev'));
 }
 
-// 5. Routes
+// 5. SaaS Routes (Prisma/DDD)
 import authRoutes from './api/routes/auth.routes.js';
 import syncRoutes from './api/routes/sync.routes.js';
+import projectRoutes from './api/routes/project.routes.js';
+import householdRoutes from './api/routes/household.routes.js';
+import zoneRoutes from './api/routes/zone.routes.js';
+import kpiRoutes from './api/routes/kpi.routes.js';
+import teamRoutes from './api/routes/team.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/households', householdRoutes);
+app.use('/api/zones', zoneRoutes);
+app.use('/api/kpi', kpiRoutes);
+app.use('/api/teams', teamRoutes);
 
 app.get('/health', (req, res) => {
     res.json({

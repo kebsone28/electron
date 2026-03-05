@@ -65,7 +65,7 @@ export const MapToolbar: React.FC = () => {
     ];
 
     return (
-        <div className={`absolute top-20 left-6 z-[1000] flex flex-col gap-0.5 p-1 rounded-xl border shadow-2xl backdrop-blur-xl transition-colors ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
+        <div className={`absolute top-20 left-6 z-[1000] flex flex-col gap-0.5 p-1 rounded-xl border shadow-2xl map-widget-glass transition-colors ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             {tools.map((tool) => (
                 <ToolbarButton
                     key={tool.id}

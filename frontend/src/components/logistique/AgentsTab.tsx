@@ -30,52 +30,47 @@ export default function AgentsTab() {
 
             {/* Left Column: Performance Table */}
             <div className="lg:col-span-2 space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
-                    <div className="p-6 bg-gradient-to-r from-blue-600/10 to-transparent border-b border-slate-800 flex justify-between items-center">
+                <div className="card overflow-hidden">
+                    <div className="p-5 border-b border-border-subtle flex justify-between items-center bg-surface-alt">
                         <div className="flex items-center space-x-3">
-                            <TrendingUp className="text-blue-400" />
-                            <h3 className="text-xl font-bold text-white">Performances Agents</h3>
+                            <TrendingUp className="text-primary" />
+                            <h3 className="text-xl font-bold">Performances Agents</h3>
                         </div>
-                        <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Temps Réel</span>
+                        <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-lg">
+                            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Temps Réel</span>
                         </div>
                     </div>
-                    <div className="p-0">
-                        <table className="w-full text-sm">
-                            <thead className="bg-slate-950/50 border-b border-slate-800">
+                    <div className="p-0 overflow-x-auto">
+                        <table className="data-table">
+                            <thead>
                                 <tr>
-                                    <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Agent</th>
-                                    <th className="text-center px-4 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Visites</th>
-                                    <th className="text-center px-4 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Tps Moyen</th>
-                                    <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Activité</th>
-                                    <th className="text-right px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Statut</th>
+                                    <th>Agent</th>
+                                    <th className="text-center">Visites</th>
+                                    <th className="text-center">Tps Moyen</th>
+                                    <th>Activité</th>
+                                    <th className="text-right">Statut</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800/50">
+                            <tbody>
                                 {agents?.map((a, i) => (
-                                    <tr key={i} className="hover:bg-slate-800/30 transition-colors group">
-                                        <td className="px-6 py-5">
-                                            <span className="text-white font-bold">{a.name}</span>
+                                    <tr key={i}>
+                                        <td className="font-bold">{a.name}</td>
+                                        <td className="text-center">
+                                            <span className="text-primary font-black text-lg">{a.visits}</span>
                                         </td>
-                                        <td className="px-4 py-5 text-center">
-                                            <span className="text-blue-400 font-black text-lg">{a.visits}</span>
-                                        </td>
-                                        <td className="px-4 py-5 text-center">
+                                        <td className="text-center">
                                             <div className="flex flex-col items-center">
-                                                <span className="text-slate-300 font-bold">{a.avgTime} min</span>
-                                                <div className="w-12 h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
-                                                    <div className="h-full bg-blue-500 w-[var(--avg-time-width)]" style={{ '--avg-time-width': `${Math.min(a.avgTime * 2, 100)}%` } as React.CSSProperties} />
+                                                <span className="font-bold">{a.avgTime} min</span>
+                                                <div className="w-12 h-1 bg-surface-alt rounded-full mt-1 overflow-hidden">
+                                                    <div className="h-full gradient-primary w-[var(--avg-time-width)]" style={{ '--avg-time-width': `${Math.min(a.avgTime * 2, 100)}%` } as React.CSSProperties} />
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5 text-slate-400 text-xs font-medium">
+                                        <td className="text-xs font-medium">
                                             {a.lastDate ? new Date(a.lastDate).toLocaleDateString() : 'N/A'}
                                         </td>
-                                        <td className="px-6 py-5 text-right">
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${a.status === 'Actif' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                a.status === 'Ralenti' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                                    'bg-red-500/10 text-red-400 border border-red-500/20'
-                                                }`}>
+                                        <td className="text-right">
+                                            <span className={`badge ${a.status === 'Actif' ? 'badge-success' : a.status === 'Ralenti' ? 'badge-warning' : 'badge-danger'}`}>
                                                 {a.status}
                                             </span>
                                         </td>

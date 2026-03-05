@@ -25,25 +25,74 @@ export interface SyncLog {
     details?: any;
 }
 
+// Paramètres de sécurité applicatifs (persistés localement)
+export interface AppSecurity {
+    key: string;   // identifier: 'projectDeletePassword' | 'adminPassword' | 'securityQuestion' | 'securityAnswer' | 'recoveryCode'
+    value: string;
+    updatedAt: string;
+}
+
 export class ProquelecDatabase extends Dexie {
     organizations!: Table<{ id: string; name: string }>;
-    users!: Table<{ id: string; organizationId: string; email: string; role: string }>;
+    users!: Table<any>;
     projects!: Table<any>;
     zones!: Table<any>;
     households!: Table<any>;
     teams!: Table<any>;
+    missions!: Table<any>;
     sync_logs!: Table<SyncLog>;
+    app_security!: Table<AppSecurity>;
 
     constructor() {
         super('ProquelecDB');
-        this.version(2).stores({
+        this.version(3).stores({
             organizations: 'id, name',
             users: 'id, organizationId, email, role',
             projects: 'id, organizationId, name, status, version',
             zones: 'id, projectId, organizationId, name, version',
-            households: 'id, zoneId, organizationId, status, version',
+            households: 'id, projectId, zoneId, organizationId, status, version',
             teams: 'id, organizationId, name, type, specialty',
             sync_logs: '++id, timestamp, action'
+        });
+        // Version 4 — table sécurité
+        this.version(4).stores({
+            organizations: 'id, name',
+            users: 'id, organizationId, email, role',
+            projects: 'id, organizationId, name, status, version',
+            zones: 'id, projectId, organizationId, name, version',
+            households: 'id, projectId, zoneId, organizationId, status, version',
+            teams: 'id, organizationId, name, type, specialty',
+            sync_logs: '++id, timestamp, action',
+            app_security: 'key, updatedAt'
+        });
+
+        // Version 5 — logistique et finances
+        this.version(5).stores({
+            inventory: 'id, projectId, category, name',
+            expenses: 'id, projectId, category, date',
+            organizations: 'id, name',
+            users: 'id, organizationId, email, role',
+            projects: 'id, organizationId, name, status, version',
+            zones: 'id, projectId, organizationId, name, version',
+            households: 'id, projectId, zoneId, organizationId, status, version',
+            teams: 'id, organizationId, name, type, specialty',
+            sync_logs: '++id, timestamp, action',
+            app_security: 'key, updatedAt'
+        });
+
+        // Version 6 — missions
+        this.version(6).stores({
+            missions: 'id, projectId, orderNumber, startDate, endDate',
+            inventory: 'id, projectId, category, name',
+            expenses: 'id, projectId, category, date',
+            organizations: 'id, name',
+            users: 'id, organizationId, email, role',
+            projects: 'id, organizationId, name, status, version',
+            zones: 'id, projectId, organizationId, name, version',
+            households: 'id, projectId, zoneId, organizationId, status, version',
+            teams: 'id, organizationId, name, type, specialty',
+            sync_logs: '++id, timestamp, action',
+            app_security: 'key, updatedAt'
         });
     }
 }
@@ -57,7 +106,12 @@ export const syncData = async (table: string, items: any[]) => {
             if (item.deletedAt) {
                 await dbTable.delete(item.id);
             } else {
-                await dbTable.put(item);
+                const existing = await dbTable.get(item.id);
+                if (existing) {
+                    await dbTable.update(item.id, { ...existing, ...item });
+                } else {
+                    await dbTable.put(item);
+                }
             }
         }
     });

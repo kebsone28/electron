@@ -8,24 +8,26 @@ import {
     ArrowUpRight
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-
-const formatFCFA = (val: number) => new Intl.NumberFormat('fr-FR').format(Math.round(val)) + ' FCFA';
+import { fmtFCFA } from '../../utils/format';
+import './FinancialKpis.css';
 
 export default function FinancialKpis({ stats, devis }: { stats: any, devis: any }) {
     const { isDarkMode } = useTheme();
 
+    const includeSupply = !!devis.includeSupplyMode;
+
     const items = [
         {
             label: 'Coût Total Estimé',
-            val: formatFCFA(stats.total),
+            val: fmtFCFA(stats.total),
             icon: DollarSign,
             color: 'indigo',
-            sub: `${formatFCFA(stats.total / 122)} par ménage (approx)`,
+            sub: `${fmtFCFA(stats.total / 122)} par ménage (approx)`,
             trend: '+2.1%'
         },
         {
             label: "Main d'Œuvre",
-            val: formatFCFA(stats.teams + stats.supervision),
+            val: fmtFCFA(stats.teams + stats.supervision),
             icon: Users,
             color: 'blue',
             sub: 'Techniciens & Supervision',
@@ -33,19 +35,19 @@ export default function FinancialKpis({ stats, devis }: { stats: any, devis: any
         },
         {
             label: 'Logistique',
-            val: formatFCFA(stats.logistics),
+            val: fmtFCFA(stats.logistics),
             icon: Truck,
             color: 'amber',
             sub: 'Véhicules & Carburant',
             trend: '-5.4%'
         },
         {
-            label: 'Matériaux',
-            val: formatFCFA(stats.materials),
+            label: 'Matériaux & Stock',
+            val: !includeSupply ? 'FOURNI PAR MOQ' : fmtFCFA(stats.materials),
             icon: Package,
-            color: 'emerald',
-            sub: 'Kit Principal & Réseau',
-            trend: '+1.8%'
+            color: !includeSupply ? 'amber' : 'emerald',
+            sub: !includeSupply ? 'Valorisation exclue du total' : 'Achat à charge entrepreneur',
+            trend: !includeSupply ? 'N/A' : '+1.8%'
         }
     ];
 
@@ -89,16 +91,16 @@ export default function FinancialKpis({ stats, devis }: { stats: any, devis: any
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                         <div>
                             <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Plafond Devis HT</span>
-                            <span className={`text-lg font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatFCFA(devis.ceiling)}</span>
+                            <span className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{fmtFCFA(devis.ceiling)}</span>
                         </div>
                         <div>
                             <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Total Réel Saisi</span>
-                            <span className={`text-lg font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatFCFA(devis.totalReal)}</span>
+                            <span className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{fmtFCFA(devis.totalReal)}</span>
                         </div>
                         <div>
                             <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Marge Globale</span>
-                            <span className={`text-lg font-black tracking-tighter ${devis.globalMargin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {formatFCFA(devis.globalMargin)}
+                            <span className={`text-base font-bold tracking-tight ${devis.globalMargin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                {fmtFCFA(devis.globalMargin)}
                             </span>
                         </div>
                         <div>
@@ -118,8 +120,7 @@ export default function FinancialKpis({ stats, devis }: { stats: any, devis: any
                     </div>
                     <div className={`h-4 border rounded-full overflow-hidden p-1 shadow-inner transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
                         <div
-                            className="h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full shadow-[0_0_15px_rgba(79,70,229,0.3)] transition-all duration-1000"
-                            style={{ width: `${Math.min(Math.round((devis.totalReal / devis.ceiling) * 100), 100)}%` } as React.CSSProperties}
+                            className={`h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full shadow-[0_0_15px_rgba(79,70,229,0.3)] transition-all duration-1000 w-[${Math.min(Math.round((devis.totalReal / devis.ceiling) * 100), 100)}%]`}
                         />
                     </div>
                 </div>

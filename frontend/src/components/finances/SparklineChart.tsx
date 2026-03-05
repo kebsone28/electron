@@ -123,8 +123,8 @@ export default function SparklineChart() {
                             <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
                         </linearGradient>
                         <linearGradient id="gradPlanned" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
-                            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                            <stop offset="0%" stopColor="#2e96db" stopOpacity="0.15" />
+                            <stop offset="100%" stopColor="#2e96db" stopOpacity="0" />
                         </linearGradient>
                     </defs>
 
@@ -151,7 +151,7 @@ export default function SparklineChart() {
                     <path d={areaActual} fill="url(#gradActual)" />
 
                     {/* Lines */}
-                    <path d={plannedPath} fill="none" stroke="#818cf8" strokeWidth="1.5" strokeDasharray="5 3" />
+                    <path d={plannedPath} fill="none" stroke="#5db0ea" strokeWidth="1.5" strokeDasharray="5 3" />
                     <path d={actualPath} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
                     {/* Interactive hit areas per segment */}
@@ -184,7 +184,7 @@ export default function SparklineChart() {
                                 {/* Actual dot */}
                                 <circle cx={ax} cy={ay} r="5" fill="#10b981" stroke={isDarkMode ? '#0f172a' : '#fff'} strokeWidth="2" />
                                 {/* Planned dot */}
-                                <circle cx={ax} cy={py} r="4" fill="#818cf8" stroke={isDarkMode ? '#0f172a' : '#fff'} strokeWidth="2" />
+                                <circle cx={ax} cy={py} r="4" fill="#5db0ea" stroke={isDarkMode ? '#0f172a' : '#fff'} strokeWidth="2" />
 
                                 {/* Tooltip box */}
                                 {(() => {
@@ -209,9 +209,9 @@ export default function SparklineChart() {
                                                 fill="#10b981">
                                                 Réel : {d.actual}M
                                             </text>
-                                            <circle cx={tooltipX + 8} cy={tooltipY + 44} r="3" fill="#818cf8" />
+                                            <circle cx={tooltipX + 8} cy={tooltipY + 44} r="3" fill="#5db0ea" />
                                             <text x={tooltipX + 16} y={tooltipY + 48} fontSize="10" fontWeight="700"
-                                                fill="#818cf8">
+                                                fill="#5db0ea">
                                                 Prévu : {d.planned}M
                                             </text>
                                         </g>

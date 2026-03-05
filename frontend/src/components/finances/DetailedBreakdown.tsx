@@ -1,8 +1,7 @@
 import { ArrowDownRight } from 'lucide-react';
 import { useFinances } from '../../hooks/useFinances';
 import { useTheme } from '../../context/ThemeContext';
-
-const formatFCFA = (val: number) => new Intl.NumberFormat('fr-FR').format(Math.round(val)) + ' F';
+import { fmtFCFA } from '../../utils/format';
 
 export default function DetailedBreakdown({ stats }: { stats: any }) {
     const { duration, householdsCount } = useFinances();
@@ -54,7 +53,7 @@ export default function DetailedBreakdown({ stats }: { stats: any }) {
             <div className={`p-8 border-t transition-all ${isDarkMode ? 'bg-slate-950/50 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
                 <div className="flex items-center justify-between">
                     <span className={`text-[13px] font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>TOTAL BUDGET</span>
-                    <span className="text-2xl font-black text-indigo-600 tracking-tighter">{formatFCFA(stats.total)}</span>
+                    <span className="text-2xl font-black text-indigo-600 tracking-tighter">{fmtFCFA(stats.total)}</span>
                 </div>
             </div>
         </div>
@@ -66,7 +65,7 @@ function SectionHeader({ title, total, isDarkMode }: { title: string, total: num
         <tr className={isDarkMode ? 'bg-slate-950/50' : 'bg-slate-50/50'}>
             <td className={`px-8 py-4 font-black text-[10px] uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{title}</td>
             <td className="px-8 py-4 text-right"></td>
-            <td className={`px-8 py-4 text-right font-black text-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatFCFA(total)}</td>
+            <td className={`px-8 py-4 text-right font-black text-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{fmtFCFA(total)}</td>
         </tr>
     );
 }
@@ -79,7 +78,7 @@ function DataItem({ label, base, val, isDarkMode }: { label: string, base: strin
                 <span className={`font-bold text-xs tracking-tight transition-colors ${isDarkMode ? 'text-slate-400 group-hover:text-slate-200' : 'text-slate-500 group-hover:text-slate-900'}`}>{label}</span>
             </td>
             <td className={`px-8 py-4 text-right font-medium text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{base}</td>
-            <td className={`px-8 py-4 text-right font-bold text-xs tabular-nums ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{formatFCFA(val)}</td>
+            <td className={`px-8 py-4 text-right font-bold text-xs tabular-nums ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{fmtFCFA(val)}</td>
         </tr>
     );
 }

@@ -4,12 +4,17 @@ import autoTable from 'jspdf-autotable';
 // ─────────────────────────────────────────────────────────────────
 // Utility helpers  (jsPDF-safe: NO Unicode thin-spaces from Intl)
 // ─────────────────────────────────────────────────────────────────
-// Format a number with dots as thousands separator (FCFA)
-const fmt = (n: number): string => {
+// Helper for plain numbers with dots as thousands separator (jsPDF-safe)
+const num = (n: number): string => {
     const s = Math.round(n).toString();
     const parts: string[] = [];
     for (let i = s.length; i > 0; i -= 3) parts.unshift(s.slice(Math.max(0, i - 3), i));
-    return parts.join('.') + ' FCFA';
+    return parts.join('.');
+};
+
+// Format a number with dots as thousands separator (FCFA)
+const fmt = (n: number): string => {
+    return num(n) + ' FCFA';
 };
 const pct = (n: number) => n.toFixed(1) + '%';
 const today = () => new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -148,20 +153,43 @@ export function generateRapportAvancement(data: {
 }) {
     const { households, projectName = 'Projet GEM' } = data;
 
-    const total = households.length || 3536;
-    const done = households.filter(h => h.status === 'Terminé').length || Math.round(total * 0.42);
-    const inProgress = households.filter(h => h.status === 'Réseau' || h.status === 'Intérieur' || h.status === 'Murs').length || Math.round(total * 0.31);
-    const pending = total - done - inProgress;
-    const completionPct = Math.round((done / total) * 100);
-
-    // By region
+    let done = 0;
+    let inProgress = 0;
+    let pending = 0;
+    const progressStatuses = ['Murs', 'Réseau', 'Intérieur', 'Travaux', 'Attente Maçon', 'Attente Branchement', 'Attente électricien'];
+    const teamStatsCount = { macon: 0, reseau: 0, installation: 0, controle: 0 };
     const byRegion: Record<string, { total: number; done: number }> = {};
+
     households.forEach(h => {
+        const status = h.status || 'Non débuté';
+        const isDone = status === 'Terminé' || status === 'Conforme';
+        const isPending = status === 'Non débuté' || status === 'En attente' || status === 'Attente démarrage';
+
+        if (isDone) done++;
+        else if (progressStatuses.includes(status) || (!!h.koboSync && status !== 'Inéligible')) inProgress++;
+        else if (isPending) pending++;
+
+        // Team Pipeline
+        if (h.koboSync?.maconOk) teamStatsCount.macon++;
+        if (h.koboSync?.reseauOk) teamStatsCount.reseau++;
+        if (h.koboSync?.interieurOk) teamStatsCount.installation++;
+        if (h.koboSync?.controleOk) teamStatsCount.controle++;
+
+        // Regions
         const r = h.region || 'Inconnue';
         if (!byRegion[r]) byRegion[r] = { total: 0, done: 0 };
         byRegion[r].total++;
-        if (h.status === 'Terminé') byRegion[r].done++;
+        if (isDone) byRegion[r].done++;
     });
+
+    const total = households.length;
+    const completionPct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const teamStats = {
+        macon: total > 0 ? Math.round((teamStatsCount.macon / total) * 100) : 0,
+        reseau: total > 0 ? Math.round((teamStatsCount.reseau / total) * 100) : 0,
+        installation: total > 0 ? Math.round((teamStatsCount.installation / total) * 100) : 0,
+        controle: total > 0 ? Math.round((teamStatsCount.controle / total) * 100) : 0,
+    };
 
     const doc = new jsPDF({ orientation: 'portrait', format: 'a4' });
     let y = 40;
@@ -171,10 +199,10 @@ export function generateRapportAvancement(data: {
     // KPIs
     y = drawSectionTitle(doc, 'Indicateurs Clés — Journée', y);
     y = drawKpiRow(doc, [
-        { label: 'Total Cibles', value: fmt(total), color: INDIGO },
-        { label: 'Terminés', value: fmt(done), color: GREEN },
-        { label: 'En Cours', value: fmt(inProgress), color: AMBER },
-        { label: 'En attente', value: fmt(pending), color: GRAY },
+        { label: 'Total Cibles', value: num(total), color: INDIGO },
+        { label: 'Terminés', value: num(done), color: GREEN },
+        { label: 'En Cours', value: num(inProgress), color: AMBER },
+        { label: 'En attente', value: num(pending), color: GRAY },
         { label: 'Avancement', value: pct(completionPct), color: completionPct >= 50 ? GREEN : INDIGO },
     ], y);
     y += 4;
@@ -188,22 +216,20 @@ export function generateRapportAvancement(data: {
             y = drawProgressBar(doc, `${region} (${rd}/${rt})`, p, y, p >= 50 ? GREEN : INDIGO);
         });
     } else {
-        // Simulated data
-        const simRegions = [
-            { name: 'Kaffrine', prog: 58 }, { name: 'Tambacounda', prog: 34 },
-            { name: 'Kédougou', prog: 71 }, { name: 'Kaolack', prog: 22 },
-        ];
-        simRegions.forEach(r => { y = drawProgressBar(doc, r.name, r.prog, y, r.prog >= 50 ? GREEN : INDIGO); });
+        doc.setFontSize(8);
+        doc.setTextColor(...GRAY);
+        doc.text('Aucune donnée régionale disponible', 21, y + 4);
+        y += 8;
     }
     y += 4;
 
     // Pipeline des équipes
     y = drawSectionTitle(doc, 'Pipeline des Sous-Équipes', y);
     const pipeline = [
-        { label: 'Équipe Maçons', prog: 82, color: INDIGO },
-        { label: 'Équipe Réseau', prog: 64, color: INDIGO },
-        { label: 'Équipe Intérieur/Élec.', prog: 47, color: AMBER },
-        { label: 'Contrôle / SENELEC', prog: 31, color: AMBER },
+        { label: 'Équipe Maçons', prog: teamStats.macon, color: INDIGO },
+        { label: 'Équipe Réseau', prog: teamStats.reseau, color: INDIGO },
+        { label: 'Équipe Intérieur/Élec.', prog: teamStats.installation, color: AMBER },
+        { label: 'Contrôle / Reception', prog: teamStats.controle, color: AMBER },
     ];
     pipeline.forEach(p => { y = drawProgressBar(doc, p.label, p.prog, y, p.color); });
     y += 4;
@@ -334,10 +360,19 @@ export function generateRapportKobo(data: { households: any[] }) {
 
     drawHeader(doc, 'Rapport Validation Kobo', `Synchronisation — ${today()}`);
 
-    const totalForms = households.length || 3536;
-    const synced = Math.round(totalForms * 0.78);
+    const totalForms = households.length;
+    const synced = households.filter(h => !!h.koboSync).length;
     const pending = totalForms - synced;
-    const errors = Math.round(totalForms * 0.03);
+    const errors = 0; // Fallback as we don't track errors explicitly yet
+
+    // Team Progress for Form Validation %
+    const teamStats = {
+        livraison: totalForms > 0 ? Math.round((households.filter(h => !!h.koboSync?.livreurDate).length / totalForms) * 100) : 0,
+        macon: totalForms > 0 ? Math.round((households.filter(h => !!h.koboSync?.maconOk).length / totalForms) * 100) : 0,
+        reseau: totalForms > 0 ? Math.round((households.filter(h => !!h.koboSync?.reseauOk).length / totalForms) * 100) : 0,
+        installation: totalForms > 0 ? Math.round((households.filter(h => !!h.koboSync?.interieurOk).length / totalForms) * 100) : 0,
+        controle: totalForms > 0 ? Math.round((households.filter(h => !!h.koboSync?.controleOk).length / totalForms) * 100) : 0,
+    };
 
     y = drawSectionTitle(doc, 'État de Synchronisation Kobo', y);
     y = drawKpiRow(doc, [
@@ -350,12 +385,12 @@ export function generateRapportKobo(data: { households: any[] }) {
 
     y = drawSectionTitle(doc, 'Taux de Validation par Formulaire', y);
     const forms = [
-        { name: 'Fiche Ménage (ID + Contrat)', pct: 92 },
-        { name: 'Fiche Travaux Maçonnerie', pct: 84 },
-        { name: 'Fiche Réseau + Câblage', pct: 71 },
-        { name: 'Fiche Installation Intérieure', pct: 63 },
-        { name: 'Fiche Contrôle SENELEC', pct: 39 },
-        { name: 'Photo Chantier (Avant/Après)', pct: 55 },
+        { name: 'Fiche Ménage (ID + Contrat)', pct: teamStats.livraison },
+        { name: 'Fiche Travaux Maçonnerie', pct: teamStats.macon },
+        { name: 'Fiche Réseau + Câblage', pct: teamStats.reseau },
+        { name: 'Fiche Installation Intérieure', pct: teamStats.installation },
+        { name: 'Fiche Contrôle SENELEC', pct: teamStats.controle },
+        { name: 'Photo Chantier (Avant/Après)', pct: Math.round(synced / totalForms * 100) },
     ];
     forms.forEach(f => { y = drawProgressBar(doc, f.name, f.pct, y, f.pct >= 70 ? GREEN : f.pct >= 50 ? AMBER : RED); });
     y += 6;
@@ -385,31 +420,56 @@ export function generateRapportKobo(data: { households: any[] }) {
 // ─────────────────────────────────────────────────────────────────
 // RAPPORT 4 — Bilan Logistique (Admin)
 // ─────────────────────────────────────────────────────────────────
-export function generateRapportLogistique(_data?: { households?: any[]; zones?: any[] }) {
+export function generateRapportLogistique(data: { households: any[]; zones?: any[] }) {
+    const { households } = data;
     const doc = new jsPDF({ orientation: 'portrait', format: 'a4' });
     let y = 40;
 
     drawHeader(doc, 'Bilan Logistique & Matériel', `Stocks & Livraisons — ${today()}`);
 
+    const total = households.length;
+    const delivered = households.filter(h => !!h.koboSync?.livreurDate).length;
+    const installed = households.filter(h => h.status === 'Terminé' || h.status === 'Conforme').length;
+    const inStock = total - delivered;
 
     y = drawSectionTitle(doc, 'État des Stocks', y);
     y = drawKpiRow(doc, [
-        { label: 'Kits Chargés (Dépôt)', value: '2 847', color: INDIGO },
-        { label: 'Kits Livrés Terrain', value: '1 932', color: GREEN },
-        { label: 'Kits Posés', value: '1 488', color: GREEN },
-        { label: 'Kits Restants', value: '359', color: AMBER },
+        { label: 'Kits Projet (Total)', value: num(total), color: INDIGO },
+        { label: 'Kits Livrés Terrain', value: num(delivered), color: GREEN },
+        { label: 'Kits Posés / Raccordés', value: num(installed), color: GREEN },
+        { label: 'Kits au Dépôt / Stock', value: num(inStock), color: AMBER },
     ], y);
     y += 6;
 
+    // Aggregate materials by region
+    const regionalMaterials: Record<string, { cable: number; potelets: number; coffretReseau: number; coffretInt: number }> = {};
+    households.forEach(h => {
+        const r = h.region || 'Inconnue';
+        if (!regionalMaterials[r]) regionalMaterials[r] = { cable: 0, potelets: 0, coffretReseau: 0, coffretInt: 0 };
+
+        // Use Kobo fields where available, otherwise fall back to 0
+        regionalMaterials[r].cable += (h.koboSync?.cableInt25 || 0) + (h.koboSync?.tranchee4 || 0); // aggregated cable metric
+        if (h.koboSync?.maconOk) regionalMaterials[r].potelets++;
+        if (h.koboSync?.reseauOk) regionalMaterials[r].coffretReseau++;
+        if (h.koboSync?.interieurOk) regionalMaterials[r].coffretInt++;
+    });
+
     y = drawSectionTitle(doc, 'Consommation Matériaux par Région', y);
-    const matData = [
-        ['Kaffrine', '1 450', '1 102 km', '2 350', '1 780'],
-        ['Tambacounda', '890', '678 km', '1 400', '1 050'],
-        ['Kédougou', '507', '389 km', '800', '622'],
-    ];
+    const matData = Object.entries(regionalMaterials).sort((a, b) => b[1].cable - a[1].cable).slice(0, 10).map(([region, mats]) => [
+        region,
+        mats.potelets.toString(),
+        `${mats.cable} m`,
+        mats.coffretReseau.toString(),
+        mats.coffretInt.toString()
+    ]);
+
+    if (matData.length === 0) {
+        matData.push(['Aucune donnée', '0', '0 m', '0', '0']);
+    }
+
     autoTable(doc, {
         startY: y,
-        head: [['Région', 'Potelets Posés', 'Câble 16mm Tiré', 'Coffrets Réseau', 'Coffrets Int.']],
+        head: [['Région', 'Potelets Posés', 'Câble Tiré (Est.)', 'Coffrets Réseau', 'Coffrets Int.']],
         body: matData,
         styles: { fontSize: 8, cellPadding: 3 },
         headStyles: { fillColor: AMBER, textColor: [255, 255, 255], fontStyle: 'bold' },

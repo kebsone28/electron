@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../store/db';
 import { KIT_COMPOSITION, GRAPPES_CONFIG } from '../utils/config';
@@ -16,7 +17,8 @@ export function useLogistique() {
     const kitsLoaded = project?.config?.logistics_workshop?.kitsLoaded || 0;
     const stockOverrides = project?.config?.stock_overrides || {};
 
-    const stockData = KIT_COMPOSITION.map(item => {
+    const kitComposition = project?.config?.kitComposition || KIT_COMPOSITION;
+    const stockData = kitComposition.map((item: any) => {
         const calculated = item.qty * kitsLoaded;
         const hasOverride = stockOverrides[item.id] !== undefined;
         const current = hasOverride ? stockOverrides[item.id] : calculated;
@@ -24,60 +26,66 @@ export function useLogistique() {
     });
 
     // --- Deliveries Logic ---
-    const deliveries = households?.filter(h => h.delivery?.agent || h.delivery?.date || h.koboSync)
-        .sort((a, b) => (b.delivery?.date || '').localeCompare(a.delivery?.date || '')) || [];
+    const deliveries = useMemo(() =>
+        households?.filter(h => h.delivery?.agent || h.delivery?.date || h.koboSync)
+            .sort((a, b) => (b.delivery?.date || '').localeCompare(a.delivery?.date || '')) || []
+        , [households]);
 
     // --- Kobo Sync Stats ---
-    const koboStats = {
-        totalPreparateurKits: 0,
-        cableInt25Total: 0,
-        cableInt15Total: 0,
-        tranchee4Total: 0,
-        tranchee15Total: 0,
-    };
+    const koboStats = useMemo(() => {
+        const stats = {
+            totalPreparateurKits: 0,
+            cableInt25Total: 0,
+            cableInt15Total: 0,
+            tranchee4Total: 0,
+            tranchee15Total: 0,
+        };
 
-    households?.forEach(h => {
-        if (h.koboSync) {
-            koboStats.totalPreparateurKits += (h.koboSync.preparateurKits || 0);
-            koboStats.cableInt25Total += (h.koboSync.cableInt25 || 0);
-            koboStats.cableInt15Total += (h.koboSync.cableInt15 || 0);
-            koboStats.tranchee4Total += (h.koboSync.tranchee4 || 0);
-            koboStats.tranchee15Total += (h.koboSync.tranchee15 || 0);
-        }
-    });
+        households?.forEach(h => {
+            if (h.koboSync) {
+                stats.totalPreparateurKits += (h.koboSync.preparateurKits || 0);
+                stats.cableInt25Total += (h.koboSync.cableInt25 || 0);
+                stats.cableInt15Total += (h.koboSync.cableInt15 || 0);
+                stats.tranchee4Total += (h.koboSync.tranchee4 || 0);
+                stats.tranchee15Total += (h.koboSync.tranchee15 || 0);
+            }
+        });
+        return stats;
+    }, [households]);
 
     // --- Agents & Performance Logic ---
-    const agentStats: Record<string, { visits: number, totalMinutes: number, timeCount: number, lastDate: string }> = {};
-    const teamActivity: Record<string, number> = {};
+    const agents = useMemo(() => {
+        const agentStats: Record<string, { visits: number, totalMinutes: number, timeCount: number, lastDate: string }> = {};
+        const teamActivity: Record<string, number> = {};
 
-    households?.forEach(h => {
-        const agent = h.delivery?.agent;
-        if (agent) {
-            if (!agentStats[agent]) agentStats[agent] = { visits: 0, totalMinutes: 0, timeCount: 0, lastDate: '' };
-            agentStats[agent].visits++;
-            if (h.workTime?.durationMinutes) {
-                agentStats[agent].totalMinutes += h.workTime.durationMinutes;
-                agentStats[agent].timeCount++;
+        households?.forEach(h => {
+            const agent = h.delivery?.agent;
+            if (agent) {
+                if (!agentStats[agent]) agentStats[agent] = { visits: 0, totalMinutes: 0, timeCount: 0, lastDate: '' };
+                agentStats[agent].visits++;
+                if (h.workTime?.durationMinutes) {
+                    agentStats[agent].totalMinutes += h.workTime.durationMinutes;
+                    agentStats[agent].timeCount++;
+                }
+                if (h.delivery?.date && h.delivery.date > agentStats[agent].lastDate) {
+                    agentStats[agent].lastDate = h.delivery.date;
+                }
             }
-            if (h.delivery?.date && h.delivery.date > agentStats[agent].lastDate) {
-                agentStats[agent].lastDate = h.delivery.date;
+
+            if (h.status === 'Conforme') {
+                const teamName = "Équipe Standard";
+                teamActivity[teamName] = (teamActivity[teamName] || 0) + 1;
             }
-        }
+        });
 
-        // Team counting logic (simplifié)
-        if (h.status === 'Conforme') {
-            const teamName = "Équipe Standard"; // Placeholder logic
-            teamActivity[teamName] = (teamActivity[teamName] || 0) + 1;
-        }
-    });
-
-    const agents = Object.entries(agentStats).map(([name, stats]) => {
-        const avgTime = stats.timeCount > 0 ? Math.round(stats.totalMinutes / stats.timeCount) : 0;
-        const lastDate = stats.lastDate ? new Date(stats.lastDate) : null;
-        const daysSince = lastDate ? Math.round((Date.now() - lastDate.getTime()) / 86400000) : 999;
-        const status = daysSince <= 3 ? 'Actif' : daysSince <= 7 ? 'Ralenti' : 'Inactif';
-        return { name, ...stats, avgTime, daysSince, status };
-    }).sort((a, b) => b.visits - a.visits);
+        return Object.entries(agentStats).map(([name, stats]) => {
+            const avgTime = stats.timeCount > 0 ? Math.round(stats.totalMinutes / stats.timeCount) : 0;
+            const lastDate = stats.lastDate ? new Date(stats.lastDate) : null;
+            const daysSince = lastDate ? Math.round((Date.now() - lastDate.getTime()) / 86400000) : 999;
+            const status = daysSince <= 3 ? 'Actif' : daysSince <= 7 ? 'Ralenti' : 'Inactif';
+            return { name, ...stats, avgTime, daysSince, status };
+        }).sort((a, b) => b.visits - a.visits);
+    }, [households]);
 
     // --- Grappes Logic (Assignments) ---
     const computeCompleteness = (assignments?: Record<string, string[]>) => {

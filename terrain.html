@@ -9,8 +9,8 @@
     <link rel="stylesheet" href="src/nav.css">
     <link rel="stylesheet" href="src/dark.css">
     <link rel="stylesheet" href="src/proquelec-theme.css">
-    <script src="/ApiService.js"></script>
-    <script src="/AuthGuard.js"></script>
+    <script src="src/infrastructure/external/ApiService.js"></script>
+    <script src="src/infrastructure/external/AuthGuard.js"></script>
     <script src="vendor/fontawesome/all.min.js"></script>
     <link rel="stylesheet" href="vendor/sweetalert2/sweetalert2.min.css">
     <script src="vendor/sweetalert2/sweetalert2.min.js"></script>
@@ -451,7 +451,7 @@
 
                     <!-- Statistics Summary -->
                     <div class="flex justify-between items-center mt-3 text-xs text-gray-500">
-                        <span id="totalMenagesDb">Chargement...</span>
+                        <span id="totalMenagesDbPanel">Chargement...</span>
                     </div>
 
                     <!-- Search Bar -->
@@ -652,217 +652,214 @@
                 </div>
             </div>
         </div>
+    </div>
 
-
-
-
-
-        <!-- Footer -->
-        <footer class="bg-gray-800 text-white py-8 mt-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="text-center">
-                    <p class="text-sm">© 2024 - Système de Pilotage Électrification de Masse</p>
-                    <p class="text-xs text-gray-400 mt-2">Développé pour l'optimisation des projets d'électrification
-                    </p>
-                </div>
-            </div>
-        </footer>
-
-        <!-- Leaflet JS -->
-        <script src="vendor/leaflet/leaflet.js"></script>
-        <!-- Leaflet MarkerCluster JS -->
-        <script src="vendor/leaflet/leaflet.markercluster.js"></script>
-        <!-- Leaflet Heatmap JS -->
-        <script src="vendor/leaflet/leaflet-heat.js"></script>
-        <!-- Leaflet extras (routing + locate) JS — must load AFTER leaflet.js -->
-        <script src="vendor/leaflet-routing-machine/leaflet-routing-machine.js"></script>
-        <script src="vendor/leaflet-locatecontrol/L.Control.Locate.min.js"></script>
-        <!-- Configuration defaults (feature flags) -->
-        <script type="module" src="src/config/defaults.js"></script>
-
-        <!-- Conditional loader for legacy map implementation (only if APP_CONFIG requests 'legacy') -->
-        <script>
-            (function () {
-                try {
-                    if (window.APP_CONFIG && window.APP_CONFIG.mapImplementation === 'legacy') {
-                        var s = document.createElement('script');
-                        s.src = 'src/legacy/legacy_map.js';
-                        s.defer = true;
-                        document.head.appendChild(s);
-                        console.log('Legacy map implementation requested — loader appended');
-                    }
-                } catch (e) { console.warn('Legacy loader skipped', e); }
-            })();
-        </script>
-        <!-- Simulation Engine Shim -->
-        <script type="module" src="src/legacy-shims.js"></script>
-
-        <!-- ========================================
-         CORE ARCHITECTURE INITIALIZATION
-         ======================================== -->
-
-        <!-- Shared Modules -->
-        <script type="module" src="src/shared/errors/DomainErrors.js"></script>
-        <script type="module" src="src/shared/constants/enums.js"></script>
-
-        <!-- Domain Objects -->
-        <script type="module" src="src/domain/value-objects/Location.js"></script>
-        <script type="module" src="src/domain/value-objects/Cost.js"></script>
-        <script type="module" src="src/domain/value-objects/ProductivityRate.js"></script>
-        <script type="module" src="src/domain/entities/Entity.js"></script>
-        <script type="module" src="src/domain/entities/Household.js"></script>
-        <script type="module" src="src/domain/entities/Project.js"></script>
-        <script type="module" src="src/domain/entities/Team.js"></script>
-        <script type="module" src="src/domain/entities/Zone.js"></script>
-
-        <!-- Services & Infrastructure -->
-        <script type="module" src="src/infrastructure/events/EventBus.js"></script>
-        <script type="module" src="src/infrastructure/logging/Logger.js"></script>
-        <script type="module" src="src/infrastructure/errors/ErrorHandler.js"></script>
-        <script type="module" src="src/infrastructure/monitoring/MetricsService.js"></script>
-        <script type="module" src="src/infrastructure/sync/SyncService.js"></script>
-        <script type="module" src="src/infrastructure/backup/BackupService.js"></script>
-        <script type="module" src="src/infrastructure/backup/RestoreService.js"></script>
-        <script type="module" src="src/infrastructure/migrations/DataStructureGenerator.js"></script>
-        <script type="module" src="src/infrastructure/migrations/MigrationService.js"></script>
-
-        <!-- Repositories -->
-        <script type="module" src="src/infrastructure/repositories/ProjectRepository.js"></script>
-        <script type="module" src="src/infrastructure/repositories/HouseholdRepository.js"></script>
-        <script type="module" src="src/infrastructure/repositories/TeamRepository.js"></script>
-        <script type="module" src="src/infrastructure/repositories/ZoneRepository.js"></script>
-
-        <!-- Application Services -->
-        <script type="module" src="src/application/services/HouseholdService.js"></script>
-        <script type="module" src="src/application/services/ProjectService.js"></script>
-        <script type="module" src="src/application/state/ProjectStore.js"></script>
-        <script type="module" src="src/application/state/StoreRegistry.js"></script>
-
-        <!-- Domain Services (Calculations) -->
-        <script type="module" src="src/domain/services/ResourceAllocationService.js"></script>
-        <script type="module" src="src/domain/services/CostCalculationService.js"></script>
-
-        <!-- App Initialization (Wires everything together) -->
-        <script type="module" src="src/init.js"></script>
-
-        <!-- Feature Scripts (depend on init.js) -->
-        <script src="map_manager.js"></script>
-        <script src="import_manager.js"></script>
-        <!-- KoboApiService loaded via init.js -->
-        <script src="auto-start-backup-watcher.js"></script>
-
-        <!-- Page Controller -->
-        <script src="terrain_main.js"></script>
-
-        <script type="module">
-            // Toolbar carte : géoloc et plein écran côté MapManager
-            document.addEventListener('DOMContentLoaded', () => {
-                const mapPanel = document.getElementById('mapPanel');
-                const mapDiv = document.getElementById('householdMap');
-                const fsBtn = document.getElementById('toggleFullscreenMapBtn');
-                const locBtn = document.getElementById('locateBtn');
-
-                // Plein écran amélioré
-                let isFull = false;
-                if (fsBtn && mapPanel && mapDiv) {
-                    const descText = mapPanel.querySelector('p.text-xs.italic');
-                    const titleRow = mapPanel.querySelector('.flex.justify-between.items-center.mb-4');
-
-                    const enterFull = () => {
-                        isFull = true;
-                        mapPanel.style.position = 'fixed';
-                        mapPanel.style.inset = '0';
-                        mapPanel.style.width = '100vw';
-                        mapPanel.style.height = '100vh';
-                        mapPanel.style.zIndex = '9999';
-                        mapPanel.style.borderRadius = '0';
-                        mapPanel.style.margin = '0';
-                        mapPanel.style.padding = '0';
-                        mapPanel.style.background = '#fff';
-                        mapDiv.style.height = 'calc(100vh - 52px)';
-                        mapDiv.style.borderRadius = '0';
-                        if (descText) descText.style.display = 'none';
-                        if (titleRow) {
-                            titleRow.style.padding = '8px 16px';
-                            titleRow.style.margin = '0';
-                            titleRow.style.borderBottom = '1px solid #e5e7eb';
-                        }
-                        document.body.style.overflow = 'hidden';
-                        fsBtn.innerHTML = '<i class="fas fa-compress mr-1"></i> Quitter';
-                        fsBtn.classList.add('bg-red-500');
-                        fsBtn.classList.remove('bg-blue-600');
-                        if (window.mapManager?.map) setTimeout(() => window.mapManager.map.invalidateSize(), 100);
-                    };
-
-                    const exitFull = () => {
-                        isFull = false;
-                        mapPanel.removeAttribute('style');
-                        mapDiv.style.height = '';
-                        mapDiv.style.borderRadius = '';
-                        if (descText) descText.style.display = '';
-                        if (titleRow) {
-                            titleRow.style.padding = '';
-                            titleRow.style.margin = '';
-                            titleRow.style.borderBottom = '';
-                        }
-                        document.body.style.overflow = '';
-                        fsBtn.innerHTML = '<i class="fas fa-expand mr-1"></i> Plein écran';
-                        fsBtn.classList.remove('bg-red-500');
-                        fsBtn.classList.add('bg-blue-600');
-                        if (window.mapManager?.map) setTimeout(() => window.mapManager.map.invalidateSize(), 100);
-                    };
-
-                    fsBtn.addEventListener('click', () => {
-                        if (isFull) exitFull(); else enterFull();
-                    });
-
-                    // Touche Échap pour quitter le plein écran
-                    document.addEventListener('keydown', (e) => {
-                        if (e.key === 'Escape' && isFull) exitFull();
-                    });
-                }
-
-                // Géolocalisation
-                if (locBtn && navigator.geolocation) {
-                    locBtn.addEventListener('click', () => {
-                        locBtn.disabled = true;
-                        locBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Localisation...';
-                        navigator.geolocation.getCurrentPosition(
-                            (pos) => {
-                                const { latitude, longitude } = pos.coords;
-                                if (window.mapManager?.map) {
-                                    window.mapManager.map.setView([latitude, longitude], 15);
-                                    L.circleMarker([latitude, longitude], { radius: 6, color: '#2563eb', fillColor: '#93c5fd', fillOpacity: 0.6 }).addTo(window.mapManager.map);
-                                }
-                                locBtn.innerHTML = '<i class="fas fa-location-arrow mr-1"></i> Ma position';
-                                locBtn.disabled = false;
-                            },
-                            () => {
-                                locBtn.innerHTML = '<i class="fas fa-location-arrow mr-1"></i> Ma position';
-                                locBtn.disabled = false;
-                            },
-                            { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
-                        );
-                    });
-                }
-            });
-        </script>
-
-        <!-- Edit Entry Modal (Legacy UI) -->
-        <div id="editEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-40">
-            <div class="bg-white rounded-lg w-full max-w-2xl p-6 shadow-lg mx-4">
-                <div class="flex justify-between items-center mb-4">
-                    <h4 class="text-lg font-semibold">Modifier la saisie</h4>
-                    <button onclick="document.getElementById('editEntryModal').classList.add('hidden')"
-                        class="text-gray-500 hover:text-gray-800">✕</button>
-                </div>
-                <p class="text-sm text-gray-500 text-center py-4">
-                    Pour modifier un ménage, veuillez utiliser les boutons de mise à jour rapide dans le panneau de
-                    détail.<br>
-                    L'édition complète sera disponible prochainement dans la nouvelle interface.
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="text-sm">© 2024 - Système de Pilotage Électrification de Masse</p>
+                <p class="text-xs text-gray-400 mt-2">Développé pour l'optimisation des projets d'électrification
                 </p>
             </div>
         </div>
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="vendor/leaflet/leaflet.markercluster.js"></script>
+    <!-- Leaflet Heatmap JS -->
+    <script src="vendor/leaflet/leaflet-heat.js"></script>
+    <!-- Leaflet extras (routing + locate) JS — must load AFTER leaflet.js -->
+    <script src="vendor/leaflet-routing-machine/leaflet-routing-machine.js"></script>
+    <script src="vendor/leaflet-locatecontrol/L.Control.Locate.min.js"></script>
+    <!-- Configuration defaults (feature flags) -->
+    <script type="module" src="src/config/defaults.js"></script>
+
+    <!-- Conditional loader for legacy map implementation (only if APP_CONFIG requests 'legacy') -->
+    <script>
+        (function () {
+            try {
+                if (window.APP_CONFIG && window.APP_CONFIG.mapImplementation === 'legacy') {
+                    var s = document.createElement('script');
+                    s.src = 'src/legacy/legacy_map.js';
+                    s.defer = true;
+                    document.head.appendChild(s);
+                    console.log('Legacy map implementation requested — loader appended');
+                }
+            } catch (e) { console.warn('Legacy loader skipped', e); }
+        })();
+    </script>
+    <!-- Simulation Engine Shim -->
+    <script type="module" src="src/legacy-shims.js"></script>
+
+    <!-- ========================================
+         CORE ARCHITECTURE INITIALIZATION
+         ======================================== -->
+
+    <!-- Shared Modules -->
+    <script type="module" src="src/shared/errors/DomainErrors.js"></script>
+    <script type="module" src="src/shared/constants/enums.js"></script>
+
+    <!-- Domain Objects -->
+    <script type="module" src="src/domain/value-objects/Location.js"></script>
+    <script type="module" src="src/domain/value-objects/Cost.js"></script>
+    <script type="module" src="src/domain/value-objects/ProductivityRate.js"></script>
+    <script type="module" src="src/domain/entities/Entity.js"></script>
+    <script type="module" src="src/domain/entities/Household.js"></script>
+    <script type="module" src="src/domain/entities/Project.js"></script>
+    <script type="module" src="src/domain/entities/Team.js"></script>
+    <script type="module" src="src/domain/entities/Zone.js"></script>
+
+    <!-- Services & Infrastructure -->
+    <script type="module" src="src/infrastructure/events/EventBus.js"></script>
+    <script type="module" src="src/infrastructure/logging/Logger.js"></script>
+    <script type="module" src="src/infrastructure/errors/ErrorHandler.js"></script>
+    <script type="module" src="src/infrastructure/monitoring/MetricsService.js"></script>
+    <script type="module" src="src/infrastructure/sync/SyncService.js"></script>
+    <script type="module" src="src/infrastructure/backup/BackupService.js"></script>
+    <script type="module" src="src/infrastructure/backup/RestoreService.js"></script>
+    <script type="module" src="src/infrastructure/migrations/DataStructureGenerator.js"></script>
+    <script type="module" src="src/infrastructure/migrations/MigrationService.js"></script>
+
+    <!-- Repositories -->
+    <script type="module" src="src/infrastructure/repositories/ProjectRepository.js"></script>
+    <script type="module" src="src/infrastructure/repositories/HouseholdRepository.js"></script>
+    <script type="module" src="src/infrastructure/repositories/TeamRepository.js"></script>
+    <script type="module" src="src/infrastructure/repositories/ZoneRepository.js"></script>
+
+    <!-- Application Services -->
+    <script type="module" src="src/application/services/HouseholdService.js"></script>
+    <script type="module" src="src/application/services/ProjectService.js"></script>
+    <script type="module" src="src/application/state/ProjectStore.js"></script>
+    <script type="module" src="src/application/state/StoreRegistry.js"></script>
+
+    <!-- Domain Services (Calculations) -->
+    <script type="module" src="src/domain/services/ResourceAllocationService.js"></script>
+    <script type="module" src="src/domain/services/CostCalculationService.js"></script>
+
+    <!-- App Initialization (Wires everything together) -->
+    <script type="module" src="src/init.js"></script>
+
+    <!-- Feature Scripts (depend on init.js) -->
+    <script src="map_manager.js"></script>
+    <script src="import_manager.js"></script>
+    <!-- KoboApiService loaded via init.js -->
+    <script src="auto-start-backup-watcher.js"></script>
+
+    <!-- Page Controller -->
+    <script src="terrain_main.js"></script>
+
+    <script type="module">
+        // Toolbar carte : géoloc et plein écran côté MapManager
+        document.addEventListener('DOMContentLoaded', () => {
+            const mapPanel = document.getElementById('mapPanel');
+            const mapDiv = document.getElementById('householdMap');
+            const fsBtn = document.getElementById('toggleFullscreenMapBtn');
+            const locBtn = document.getElementById('locateBtn');
+
+            // Plein écran amélioré
+            let isFull = false;
+            if (fsBtn && mapPanel && mapDiv) {
+                const descText = mapPanel.querySelector('p.text-xs.italic');
+                const titleRow = mapPanel.querySelector('.flex.justify-between.items-center.mb-4');
+
+                const enterFull = () => {
+                    isFull = true;
+                    mapPanel.style.position = 'fixed';
+                    mapPanel.style.inset = '0';
+                    mapPanel.style.width = '100vw';
+                    mapPanel.style.height = '100vh';
+                    mapPanel.style.zIndex = '9999';
+                    mapPanel.style.borderRadius = '0';
+                    mapPanel.style.margin = '0';
+                    mapPanel.style.padding = '0';
+                    mapPanel.style.background = '#fff';
+                    mapDiv.style.height = 'calc(100vh - 52px)';
+                    mapDiv.style.borderRadius = '0';
+                    if (descText) descText.style.display = 'none';
+                    if (titleRow) {
+                        titleRow.style.padding = '8px 16px';
+                        titleRow.style.margin = '0';
+                        titleRow.style.borderBottom = '1px solid #e5e7eb';
+                    }
+                    document.body.style.overflow = 'hidden';
+                    fsBtn.innerHTML = '<i class="fas fa-compress mr-1"></i> Quitter';
+                    fsBtn.classList.add('bg-red-500');
+                    fsBtn.classList.remove('bg-blue-600');
+                    if (window.mapManager?.map) setTimeout(() => window.mapManager.map.invalidateSize(), 100);
+                };
+
+                const exitFull = () => {
+                    isFull = false;
+                    mapPanel.removeAttribute('style');
+                    mapDiv.style.height = '';
+                    mapDiv.style.borderRadius = '';
+                    if (descText) descText.style.display = '';
+                    if (titleRow) {
+                        titleRow.style.padding = '';
+                        titleRow.style.margin = '';
+                        titleRow.style.borderBottom = '';
+                    }
+                    document.body.style.overflow = '';
+                    fsBtn.innerHTML = '<i class="fas fa-expand mr-1"></i> Plein écran';
+                    fsBtn.classList.remove('bg-red-500');
+                    fsBtn.classList.add('bg-blue-600');
+                    if (window.mapManager?.map) setTimeout(() => window.mapManager.map.invalidateSize(), 100);
+                };
+
+                fsBtn.addEventListener('click', () => {
+                    if (isFull) exitFull(); else enterFull();
+                });
+
+                // Touche Échap pour quitter le plein écran
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && isFull) exitFull();
+                });
+            }
+
+            // Géolocalisation
+            if (locBtn && navigator.geolocation) {
+                locBtn.addEventListener('click', () => {
+                    locBtn.disabled = true;
+                    locBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Localisation...';
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            const { latitude, longitude } = pos.coords;
+                            if (window.mapManager?.map) {
+                                window.mapManager.map.setView([latitude, longitude], 15);
+                                L.circleMarker([latitude, longitude], { radius: 6, color: '#2563eb', fillColor: '#93c5fd', fillOpacity: 0.6 }).addTo(window.mapManager.map);
+                            }
+                            locBtn.innerHTML = '<i class="fas fa-location-arrow mr-1"></i> Ma position';
+                            locBtn.disabled = false;
+                        },
+                        () => {
+                            locBtn.innerHTML = '<i class="fas fa-location-arrow mr-1"></i> Ma position';
+                            locBtn.disabled = false;
+                        },
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
+                    );
+                });
+            }
+        });
+    </script>
+
+    <!-- Edit Entry Modal (Legacy UI) -->
+    <div id="editEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-40">
+        <div class="bg-white rounded-lg w-full max-w-2xl p-6 shadow-lg mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h4 class="text-lg font-semibold">Modifier la saisie</h4>
+                <button onclick="document.getElementById('editEntryModal').classList.add('hidden')"
+                    class="text-gray-500 hover:text-gray-800">✕</button>
+            </div>
+            <p class="text-sm text-gray-500 text-center py-4">
+                Pour modifier un ménage, veuillez utiliser les boutons de mise à jour rapide dans le panneau de
+                détail.<br>
+                L'édition complète sera disponible prochainement dans la nouvelle interface.
+            </p>
+        </div>
+    </div>
 </body>
 
 </html>

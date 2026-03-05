@@ -2,43 +2,87 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../store/db';
 import type { Project } from '../utils/types';
 
+import { useState, useEffect } from 'react';
+
 export function useProject() {
-    const project = useLiveQuery(async () => {
-        const p = await db.projects.toArray();
-        if (p.length === 0) {
-            // Default project if none exists (should be handled by sync/init)
-            return {
-                id: 'default',
-                name: 'Projet Proquelec',
-                duration: 180,
-                config: {
-                    logistics_workshop: { kitsLoaded: 0 },
-                    staffConfig: {
-                        'macon': { amount: 150000, mode: 'daily' },
-                        'network': { amount: 200000, mode: 'daily' },
-                        'interior': { amount: 120000, mode: 'daily' },
-                        'controller': { amount: 250000, mode: 'daily' },
-                    },
-                    costs: {
-                        vehicleRental: {
-                            'pickup': 50000,
-                            'truck': 150000,
-                        }
-                    }
-                }
-            } as Project;
+    const [activeProjectId, setActiveProjectIdState] = useState<string | null>(localStorage.getItem('active_project_id'));
+
+    const projects = useLiveQuery(() => db.projects.toArray()) || [];
+
+    const activeProject = useLiveQuery(async () => {
+        if (!activeProjectId && projects.length > 0) {
+            return projects[0];
         }
-        return p[0] as Project;
-    });
+        if (activeProjectId) {
+            return await db.projects.get(activeProjectId);
+        }
+        return null;
+    }, [activeProjectId, projects]);
+
+    useEffect(() => {
+        if (!activeProjectId && projects.length > 0) {
+            const id = projects[0].id;
+            setActiveProjectIdState(id);
+            localStorage.setItem('active_project_id', id);
+        }
+    }, [projects, activeProjectId]);
+
+    const setActiveProjectId = (id: string) => {
+        setActiveProjectIdState(id);
+        localStorage.setItem('active_project_id', id);
+    };
+
+    const createProject = async (name: string) => {
+        const id = `proj_${Date.now()}`;
+        const newProject: Project = {
+            id,
+            organizationId: (window as any).organizationId || 'org_test_2026',
+            name,
+            status: 'planned',
+            version: 1,
+            config: {
+                teams: [],
+                costs: { staffRates: {}, vehicleRental: {} },
+                materialCatalog: []
+            }
+        } as any;
+        await db.projects.add(newProject);
+        setActiveProjectId(id);
+        return newProject;
+    };
 
     const updateProject = async (updates: Partial<Project>) => {
-        const p = await db.projects.toArray();
-        if (p.length > 0) {
-            await db.projects.update(p[0].id, updates);
-        } else {
-            await db.projects.add({ ...updates, id: 'default', organizationId: 'default' });
+        const currentId = activeProject?.id || activeProjectId;
+        if (currentId) {
+            await db.projects.update(currentId, updates);
         }
     };
 
-    return { project, updateProject, isLoading: project === undefined };
+    const deleteProject = async (projectId: string) => {
+        // Delete all households linked to this project
+        await db.households.where('projectId').equals(projectId).delete();
+        // Delete the project itself
+        await db.projects.delete(projectId);
+        // Switch to another project if the deleted one was active
+        if (activeProjectId === projectId) {
+            const remaining = await db.projects.toArray();
+            if (remaining.length > 0) {
+                setActiveProjectId(remaining[0].id);
+            } else {
+                setActiveProjectIdState(null);
+                localStorage.removeItem('active_project_id');
+            }
+        }
+    };
+
+    return {
+        project: activeProject,
+        projects,
+        activeProjectId,
+        setActiveProjectId,
+        createProject,
+        updateProject,
+        deleteProject,
+        isLoading: activeProject === undefined
+    };
 }

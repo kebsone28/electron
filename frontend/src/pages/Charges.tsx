@@ -6,21 +6,27 @@ import {
     DollarSign,
     PieChart as PieIcon,
     Table as TableIcon,
-    ArrowUpRight
+    ArrowUpRight,
+    Package
 } from 'lucide-react';
 import { useFinances } from '../hooks/useFinances';
 import FinancialKpis from '../components/finances/FinancialKpis';
 import CostPieChart from '../components/finances/CostPieChart';
 import DetailedBreakdown from '../components/finances/DetailedBreakdown';
 import DevisVsReel from '../components/finances/DevisVsReel';
+import MaterialDatabase from '../components/finances/MaterialDatabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import SparklineChart from '../components/finances/SparklineChart';
 import { useTheme } from '../context/ThemeContext';
+import { exportToPDF } from '../services/exportService';
+import { Database } from 'lucide-react';
 
 export default function Charges() {
-    const { isLoading, stats, devis } = useFinances();
-    const [activeTab, setActiveTab] = useState<'overview' | 'comparison'>('overview');
+    const { isLoading, stats, devis, project, toggleClientProvidesMaterials } = useFinances();
+    const [activeTab, setActiveTab] = useState<'overview' | 'comparison' | 'inventory'>('overview');
     const { isDarkMode } = useTheme();
+
+    const isClientProvided = !!project?.config?.clientProvidesMaterials;
 
     if (isLoading) {
         return (
@@ -48,6 +54,14 @@ export default function Charges() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={toggleClientProvidesMaterials}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border ${isClientProvided ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/20' : isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-500 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900 shadow-sm'}`}
+                    >
+                        <Package size={14} />
+                        {isClientProvided ? 'Matériaux Fournis par Client' : 'Fourniture Entrepreneur'}
+                    </button>
+
                     <div className={`backdrop-blur-md border p-1 rounded-2xl flex transition-all ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                         <button
                             onClick={() => setActiveTab('overview')}
@@ -61,7 +75,14 @@ export default function Charges() {
                             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-xs transition-all ${activeTab === 'comparison' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : isDarkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}
                         >
                             <TableIcon size={14} />
-                            DEVIS VS RÉEL
+                            PRESTATION (DEVIS)
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('inventory')}
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-xs transition-all ${activeTab === 'inventory' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : isDarkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                        >
+                            <Database size={14} />
+                            MATÉRIELS
                         </button>
                     </div>
                     <button
@@ -76,6 +97,7 @@ export default function Charges() {
             <AnimatePresence mode="wait">
                 {activeTab === 'overview' ? (
                     <motion.div
+                        id="financial-analysis-content"
                         key="overview"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -95,14 +117,25 @@ export default function Charges() {
                             </div>
                         </div>
                     </motion.div>
-                ) : (
+                ) : activeTab === 'comparison' ? (
                     <motion.div
+                        id="financial-analysis-content"
                         key="comparison"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                     >
                         <DevisVsReel />
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        id="financial-analysis-content"
+                        key="inventory"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                    >
+                        <MaterialDatabase />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -119,7 +152,20 @@ export default function Charges() {
                         <p className="text-indigo-100/70 font-medium text-sm max-w-xl">Générez une analyse financière détaillée incluant tous les postes de dépense et les projections de marge.</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                        <button className="flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-xs hover:scale-105 transition-all shadow-xl">
+                        <button
+                            id="pdf-export-trigger"
+                            onClick={async () => {
+                                const ok = await exportToPDF('financial-analysis-content', {
+                                    title: 'Bilan Financier Prévisionnel',
+                                    subtitle: 'Détail des charges, marges et KPIs du projet actif.',
+                                    filename: 'bilan_financier'
+                                });
+                                if (ok) {
+                                    console.log('PDF généré');
+                                }
+                            }}
+                            className="flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-xs hover:scale-105 transition-all shadow-xl"
+                        >
                             <Download size={18} />
                             EXPORTER PDF
                         </button>

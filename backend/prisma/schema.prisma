@@ -54,6 +54,7 @@ model Zone {
   project        Project      @relation(fields: [projectId], references: [id])
   organizationId String
   name           String
+  metadata       Json?        @default("{}")
   version        Int          @default(1)
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?
@@ -68,6 +69,7 @@ model Household {
   status         String
   location       Json
   owner          Json
+  koboData       Json?        @default("{}")
   version        Int          @default(1)
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?

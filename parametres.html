@@ -11,8 +11,8 @@
     <link rel="stylesheet" href="src/parametres.css">
     <link rel="stylesheet" href="src/nav.css">
     <link rel="stylesheet" href="src/proquelec-theme.css">
-    <script src="/ApiService.js"></script>
-    <script src="/AuthGuard.js"></script>
+    <script src="src/infrastructure/external/ApiService.js"></script>
+    <script src="src/infrastructure/external/AuthGuard.js"></script>
 </head>
 
 <body class="proquelec-theme">
@@ -655,8 +655,8 @@
                 </div>
             </div>
 
-            <!-- Onglet Bilan des Besoins -->
-            <div id="content-requirements" class="hidden">
+            <!-- Onglet Bilan des Besoins (Calculé) -->
+            <div id="content-requirements-v2" class="hidden">
                 <div class="bg-white rounded-lg card-shadow p-6 mb-8">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="section-title mb-0">
@@ -726,6 +726,7 @@
                     </div>
                 </div>
             </div>
+        </div>
     </main>
 
     <!-- Accessible global modal (invisible by default) -->

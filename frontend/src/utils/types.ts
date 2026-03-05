@@ -2,18 +2,28 @@ export type UserRole = 'ADMIN_PROQUELEC' | 'DG_PROQUELEC' | 'CLIENT_LSE' | 'CHEF
 
 export interface User {
     id: string;
-    email: string;
-    role: UserRole;
+    email: string; // Acts as username/login
     name: string;
+    role: UserRole;
+    password?: string;
+    organization?: string;
     teamId?: string; // If CHEF_EQUIPE
+    active?: boolean;
+    createdAt?: string;
+    requires2FA?: boolean;
+    secret2FAQuestion?: string;
+    secret2FAAnswer?: string;
 }
 
 export interface Household {
     id: string;
+    projectId: string;
+    organizationId: string;
     region: string;
     status: string;
     owner?: string;
     photo?: string;
+    version?: number;
     delivery?: {
         agent?: string;
         date?: string;
@@ -98,9 +108,12 @@ export interface SubTeamEquipment {
 export interface ProjectConfig {
     teams?: Team[];
     grappesConfig?: any;
+    kitComposition?: any[];
     logisticsEquipment?: Partial<Record<TradeKey, LogisticsEquipment>>;
     stock_overrides?: Record<string, number>;
     assignments?: Record<string, Record<string, string[]>>; // sgId -> tradeKey -> teamIds
+    clientProvidesMaterials?: boolean; // Legacy/Labor toggle
+    includeSupply?: boolean; // NEW: Toggle to include material procurement costs
 
     // Legacy / transitional
     logistics_workshop?: {
@@ -125,7 +138,10 @@ export interface ProjectConfig {
 
 export interface Project {
     id: string;
+    organizationId: string;
     name: string;
+    status: string;
+    version: number;
     duration?: number;
     config: ProjectConfig;
 }

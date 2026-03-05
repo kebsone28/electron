@@ -3,7 +3,7 @@ import { useTheme } from '../../context/ThemeContext';
 export default function CostPieChart({ stats }: { stats: any }) {
     const { isDarkMode } = useTheme();
     const data = [
-        { label: "Main d'Œuvre", val: stats.teams + stats.supervision, color: '#6366f1' },
+        { label: "Main d'Œuvre", val: stats.teams + stats.supervision, color: '#2e96db' },
         { label: "Logistique", val: stats.logistics, color: '#f59e0b' },
         { label: "Matériaux", val: stats.materials, color: '#10b981' },
     ];
@@ -34,7 +34,8 @@ export default function CostPieChart({ stats }: { stats: any }) {
                                 fill="transparent"
                                 stroke={item.color}
                                 strokeWidth="10"
-                                style={{ strokeDasharray: dashArray, strokeDashoffset: dashOffset } as any}
+                                strokeDasharray={dashArray}
+                                strokeDashoffset={dashOffset}
                                 className={`transition-all duration-1000 cursor-pointer ${isDarkMode ? 'hover:stroke-white' : 'hover:stroke-slate-900'}`}
                             />
                         );
@@ -52,7 +53,11 @@ export default function CostPieChart({ stats }: { stats: any }) {
                 {data.map((item, i) => (
                     <div key={i} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-slate-950/50 border-slate-800/50 group-hover:border-slate-800' : 'bg-slate-50 border-slate-100 group-hover:border-slate-200'}`}>
                         <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: item.color } as any} />
+                            <div
+                                className="w-3 h-3 rounded-full shadow-sm"
+                                data-color={item.color}
+                                ref={(el) => { if (el) el.style.backgroundColor = item.color; }}
+                            />
                             <span className={`font-bold text-xs tracking-tight ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{item.label}</span>
                         </div>
                         <span className={`font-black text-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{((item.val / total) * 100).toFixed(1)}%</span>

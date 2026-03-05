@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
 import {
-    LayoutGrid,
-    ChevronDown,
-    ChevronUp,
-    Settings,
-    Layers,
     Activity,
     Search,
     Sun,
-    Moon
+    Moon,
+    Settings,
+    ChevronDown,
+    ChevronUp,
+    Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import './MapWidgets.css';
 
 interface WidgetBarProps {
     activeWidgets: {
-        pipeline: boolean;
-        kpi: boolean;
+        unified: boolean;
         tools: boolean;
         search: boolean;
+        legend: boolean;
     };
     onToggleWidget: (id: string) => void;
 }
@@ -28,26 +28,16 @@ export const WidgetBar: React.FC<WidgetBarProps> = ({ activeWidgets, onToggleWid
 
     return (
         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-1">
-            <div className={`p-0.5 rounded-xl border shadow-2xl backdrop-blur-xl flex items-center gap-0.5 ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
+            <div className={`p-0.5 rounded-xl border shadow-2xl flex items-center gap-0.5 map-widget-glass ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                 <button
-                    onClick={() => onToggleWidget('pipeline')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${activeWidgets.pipeline
+                    onClick={() => onToggleWidget('unified')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${activeWidgets.unified
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
                         : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                         }`}
                 >
                     <Activity size={12} />
-                    Pipeline
-                </button>
-                <button
-                    onClick={() => onToggleWidget('kpi')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${activeWidgets.kpi
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                        : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                        }`}
-                >
-                    <LayoutGrid size={12} />
-                    KPI
+                    Dashboard
                 </button>
                 <button
                     onClick={() => onToggleWidget('tools')}
@@ -70,6 +60,17 @@ export const WidgetBar: React.FC<WidgetBarProps> = ({ activeWidgets, onToggleWid
                     Recherche
                 </button>
 
+                <button
+                    onClick={() => onToggleWidget('legend')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${activeWidgets.legend
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                        : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                >
+                    <Info size={12} />
+                    Légende
+                </button>
+
                 <div className={`w-px h-3 mx-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
                 <button
@@ -85,23 +86,45 @@ export const WidgetBar: React.FC<WidgetBarProps> = ({ activeWidgets, onToggleWid
     );
 };
 
-interface PipelineWidgetProps {
+interface UnifiedStatusWidgetProps {
     selectedPhases: string[];
     onTogglePhase: (phase: string) => void;
+    selectedTeamFilters: string[];
+    onToggleTeamFilter: (team: string) => void;
+    stats: {
+        total: number;
+        enCours: number;
+        termine: number;
+        bloque: number;
+        teamProgress: {
+            livraison: number;
+            maconnerie: number;
+            reseau: number;
+            installation: number;
+            controle: number;
+        }
+    } | null;
 }
 
-export const PipelineWidget: React.FC<PipelineWidgetProps> = ({ selectedPhases, onTogglePhase }) => {
+export const UnifiedStatusWidget: React.FC<UnifiedStatusWidgetProps> = ({
+    selectedPhases,
+    onTogglePhase,
+    selectedTeamFilters,
+    onToggleTeamFilter,
+    stats
+}) => {
     const { isDarkMode } = useTheme();
     const [isMinimized, setIsMinimized] = useState(false);
+    const [activeTab, setActiveTab] = useState<'phases' | 'stats' | 'teams'>('phases');
 
     const phases = [
         { label: 'Toutes', color: 'bg-indigo-500', value: 'all' },
-        { label: 'Non débuté', color: 'bg-slate-400', value: 'Non débuté' },
+        { label: 'Non installé', color: 'bg-red-500', value: 'Non débuté' },
         { label: 'Murs', color: 'bg-amber-500', value: 'Murs' },
         { label: 'Réseau', color: 'bg-blue-500', value: 'Réseau' },
         { label: 'Intérieur', color: 'bg-indigo-500', value: 'Intérieur' },
         { label: 'Terminé', color: 'bg-emerald-500', value: 'Terminé' },
-        { label: 'Alertes/Bloqué', color: 'bg-red-500', value: 'Problème' }
+        { label: 'Bloqué', color: 'bg-rose-500', value: 'Problème' }
     ];
 
     const isPhaseSelected = (value: string) => {
@@ -109,101 +132,35 @@ export const PipelineWidget: React.FC<PipelineWidgetProps> = ({ selectedPhases, 
         return selectedPhases.includes(value);
     };
 
-    return (
-        <motion.div
-            drag
-            dragMomentum={false}
-            className={`absolute bottom-32 left-8 z-[1000] w-56 rounded-2xl border shadow-2xl overflow-hidden backdrop-blur-xl transition-colors ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}
-        >
-            <div className="p-4 bg-indigo-600 flex items-center justify-between cursor-grab active:cursor-grabbing">
-                <div className="flex items-center gap-2">
-                    <Activity size={16} className="text-white" />
-                    <span className="text-xs font-black text-white italic uppercase tracking-widest">Pipeline Travaux</span>
-                </div>
-                <button onClick={() => setIsMinimized(!isMinimized)} className="text-white/50 hover:text-white transition-colors">
-                    {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-            </div>
-
-            <AnimatePresence>
-                {!isMinimized && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="p-5 space-y-4"
-                    >
-                        <div className={`flex items-center justify-between text-[10px] font-black uppercase transition-colors ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                            <span>Phases</span>
-                            <Layers size={12} />
-                        </div>
-
-                        <div className="space-y-2">
-                            {phases.map((phase, i) => {
-                                const active = isPhaseSelected(phase.value);
-                                return (
-                                    <div
-                                        key={i}
-                                        onClick={() => onTogglePhase(phase.value)}
-                                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${active ? (isDarkMode ? 'bg-indigo-600/20 border-indigo-500/50 text-white' : 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-sm shadow-indigo-100') : (isDarkMode ? 'bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50')}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${phase.color}`} />
-                                            <span className="text-[11px] tracking-tight">{phase.label}</span>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            title={`Filtrer par ${phase.label}`}
-                                            checked={active}
-                                            onChange={() => { }}
-                                            className="rounded text-indigo-600 focus:ring-0 cursor-pointer"
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </motion.div>
-    );
-};
-
-export const KpiWidget: React.FC<{
-    statsData: {
-        total: number;
-        enAttente: number;
-        enCours: number;
-        termine: number;
-        bloque: number;
-    } | null;
-}> = ({ statsData }) => {
-    const { isDarkMode } = useTheme();
-    const [isMinimized, setIsMinimized] = useState(false);
-
-    const stats = [
-        { label: 'Conformes', value: statsData?.termine || 0, color: 'text-emerald-500', bgColor: 'bg-emerald-500' },
-        { label: 'En cours', value: statsData?.enCours || 0, color: 'text-blue-500', bgColor: 'bg-blue-500' },
-        { label: 'Problèmes', value: statsData?.bloque || 0, color: 'text-amber-500', bgColor: 'bg-amber-500' }
+    const teamRows = [
+        { id: 'livraison', label: 'Livreur', progress: stats?.teamProgress.livraison || 0, color: 'bg-amber-400' },
+        { id: 'maconnerie', label: 'Maçon', progress: stats?.teamProgress.maconnerie || 0, color: 'bg-blue-400' },
+        { id: 'reseau', label: 'Réseau', progress: stats?.teamProgress.reseau || 0, color: 'bg-indigo-400' },
+        { id: 'installation', label: 'Installateur', progress: stats?.teamProgress.installation || 0, color: 'bg-emerald-400' },
+        { id: 'controle', label: 'Contrôleur', progress: stats?.teamProgress.controle || 0, color: 'bg-purple-400' },
     ];
 
-    const total = statsData?.total || 0;
-    const completedPct = total > 0 ? Math.round(((statsData?.termine || 0) / total) * 100) : 0;
-
     return (
         <motion.div
             drag
             dragMomentum={false}
-            className={`absolute bottom-32 right-8 z-[1000] w-56 rounded-2xl border shadow-2xl overflow-hidden backdrop-blur-xl transition-colors ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}
+            className={`absolute bottom-32 left-8 z-[1000] w-72 rounded-2xl border shadow-2xl overflow-hidden transition-colors map-widget-glass ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
         >
-            <div className="p-4 bg-indigo-600 flex items-center justify-between cursor-grab active:cursor-grabbing">
+            <div className="p-4 bg-indigo-600 map-widget-header flex items-center justify-between cursor-grab active:cursor-grabbing">
                 <div className="flex items-center gap-2">
-                    <LayoutGrid size={16} className="text-white" />
-                    <span className="text-xs font-black text-white italic uppercase tracking-widest">Tableau de bord</span>
+                    <Activity size={16} className="text-white" />
+                    <span className="text-xs font-black text-white italic uppercase tracking-widest">Suivi Opérationnel</span>
                 </div>
-                <button onClick={() => setIsMinimized(!isMinimized)} className="text-white/50 hover:text-white transition-colors">
-                    {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="drag-handle-dots flex items-center gap-0.5">
+                        <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                        <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                        <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                    </div>
+                    <button onClick={() => setIsMinimized(!isMinimized)} className="text-white/50 hover:text-white transition-colors">
+                        {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                </div>
             </div>
 
             <AnimatePresence>
@@ -212,37 +169,120 @@ export const KpiWidget: React.FC<{
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="p-6 space-y-6"
+                        className="flex flex-col"
                     >
-                        <div className={`flex justify-between items-center text-[10px] font-black uppercase transition-colors ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                            <span>Total</span>
-                            <span className={isDarkMode ? 'text-white font-bold' : 'text-slate-900 font-bold'}>{total}</span>
-                        </div>
-
-                        <div className="space-y-4">
-                            {stats.map((s, i) => (
-                                <div key={i} className="flex justify-between items-center text-[11px] font-bold">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${s.bgColor}`} />
-                                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>{s.label}</span>
-                                    </div>
-                                    <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>{s.value}</span>
-                                </div>
+                        {/* Tabs */}
+                        <div className={`flex border-b transition-colors ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                            {[
+                                { id: 'phases', label: 'Filtres' },
+                                { id: 'stats', label: 'KPIs' },
+                                { id: 'teams', label: 'Équipes' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest transition-all relative ${activeTab === tab.id
+                                        ? 'text-indigo-500 bg-indigo-500/5'
+                                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+                                >
+                                    {tab.label}
+                                    {activeTab === tab.id && <div className="absolute bottom-0 left-[20%] right-[20%] h-0.5 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
+                                </button>
                             ))}
                         </div>
 
-                        <div className={`pt-4 border-t transition-colors ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                            <div className="flex justify-between text-[11px] mb-2 font-black uppercase tracking-tight">
-                                <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>{completedPct}% complété</span>
-                                <span className="text-indigo-600 font-black">{total} CIBLES</span>
-                            </div>
-                            <div className={`h-1.5 w-full rounded-full overflow-hidden transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${completedPct}%` }}
-                                    className="h-full bg-indigo-500 rounded-full"
-                                />
-                            </div>
+                        <div className="p-5 overflow-y-auto max-h-[350px] widget-content-scroll">
+                            {activeTab === 'phases' && (
+                                <div className="space-y-2">
+                                    {phases.map((phase, i) => {
+                                        const active = isPhaseSelected(phase.value);
+                                        return (
+                                            <div
+                                                key={i}
+                                                onClick={() => onTogglePhase(phase.value)}
+                                                className={`flex items-center justify-between p-2.5 rounded-xl border map-widget-item transition-all cursor-pointer ${active ? (isDarkMode ? 'bg-indigo-600/20 border-indigo-500/50 text-white shadow-xl shadow-slate-950/20' : 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-sm shadow-indigo-100') : (isDarkMode ? 'bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50')}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${phase.color}`} />
+                                                    <span className="text-[11px] tracking-tight">{phase.label}</span>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    title={`Filtrer par ${phase.label}`}
+                                                    checked={active}
+                                                    readOnly
+                                                    className="rounded text-indigo-500 focus:ring-0 cursor-pointer"
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {activeTab === 'stats' && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            { label: 'Total', value: stats?.total || 0, color: 'text-slate-500' },
+                                            { label: 'Conformes', value: stats?.termine || 0, color: 'text-emerald-500' },
+                                            { label: 'En cours', value: stats?.enCours || 0, color: 'text-blue-500' },
+                                            { label: 'Bloqués', value: stats?.bloque || 0, color: 'text-red-500' }
+                                        ].map((s, i) => (
+                                            <div key={i} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                                                <p className="text-[8px] font-black uppercase opacity-50 mb-1">{s.label}</p>
+                                                <p className={`text-sm font-black ${s.color}`}>{s.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className={`pt-4 border-t transition-colors ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                                        <div className="flex justify-between text-[10px] mb-2 font-black uppercase italic">
+                                            <span className="text-slate-500">Progression Globale</span>
+                                            <span className="text-indigo-600">{stats?.total ? Math.round((stats.termine / stats.total) * 100) : 0}%</span>
+                                        </div>
+                                        <div className={`h-1.5 w-full rounded-full overflow-hidden transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                            <div
+                                                className={`h-full bg-indigo-500 rounded-full transition-all duration-1000 dynamic-progress-bar`}
+                                                data-progress={`${stats?.total ? (stats.termine / stats.total) * 100 : 0}`}
+                                                ref={(el) => { if (el) el.style.setProperty('--progress-width', `${stats?.total ? (stats.termine / stats.total) * 100 : 0}%`); }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'teams' && (
+                                <div className="space-y-5">
+                                    {teamRows.map((team, i) => (
+                                        <div key={i} className="space-y-2">
+                                            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                                <div
+                                                    onClick={() => onToggleTeamFilter(team.id)}
+                                                    className="flex items-center gap-2 cursor-pointer group"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        title={`Afficher/Masquer ${team.label}`}
+                                                        checked={selectedTeamFilters.includes(team.id)}
+                                                        readOnly
+                                                        className="rounded text-indigo-600 focus:ring-0 cursor-pointer w-3 h-3"
+                                                    />
+                                                    <span className={`${selectedTeamFilters.includes(team.id) ? (isDarkMode ? 'text-white' : 'text-slate-900') : 'text-slate-500'}`}>
+                                                        {team.label}
+                                                    </span>
+                                                </div>
+                                                <span className="text-indigo-600">{team.progress}%</span>
+                                            </div>
+                                            <div className={`h-1.5 w-full rounded-full overflow-hidden transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${team.progress}%` }}
+                                                    className={`h-full rounded-full transition-opacity ${selectedTeamFilters.includes(team.id) ? 'opacity-100' : 'opacity-20'} ${team.color}`}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 )}

@@ -1,13 +1,14 @@
 /**
  * ASCII-safe number formatter for GEM SaaS.
- * Uses plain dots (.) as thousands separator — no Unicode thin-spaces.
+ * Uses plain spaces ( ) as thousands separator — no Unicode thin-spaces.
  * Works in both the browser and jsPDF.
  */
 export function fmtNum(n: number): string {
-    const s = Math.round(n).toString();
+    const isNegative = n < 0;
+    const s = Math.round(Math.abs(n)).toString();
     const parts: string[] = [];
     for (let i = s.length; i > 0; i -= 3) parts.unshift(s.slice(Math.max(0, i - 3), i));
-    return parts.join('.');
+    return (isNegative ? '-' : '') + parts.join(' ');
 }
 
 /** fmtNum + " FCFA" suffix */

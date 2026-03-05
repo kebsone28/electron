@@ -1,40 +1,43 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import type { User, UserRole } from '../utils/types';
 
 interface AuthContextType {
     user: User | null;
-    login: (username: string, role: UserRole, name: string, teamId?: string) => void;
+    login: (email: string, role: string, name: string, organization?: string, id?: string, accessToken?: string) => void;
     logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-
-    useEffect(() => {
-        // Restore session from localStorage if present
+    const [user, setUser] = useState<User | null>(() => {
         const storedUser = localStorage.getItem('user');
-        if (storedUser) {
+        const token = localStorage.getItem('access_token');
+        if (storedUser && token) {
             try {
-                setUser(JSON.parse(storedUser));
+                return JSON.parse(storedUser);
             } catch (e) {
                 console.error('Failed to parse stored user', e);
                 localStorage.removeItem('user');
+                localStorage.removeItem('access_token');
+                return null;
             }
         }
-    }, []);
+        return null;
+    });
 
-    const login = (username: string, role: UserRole, name: string, teamId?: string) => {
+    const login = (email: string, role: string, name: string, organization?: string, id?: string, accessToken?: string) => {
         const newUser: User = {
-            id: 'mock-id-' + Date.now(),
-            email: username, // 'email' field reused for username (backward compat)
-            role,
+            id: id || 'temp-id-' + Date.now(),
+            email,
+            role: role as UserRole,
             name,
-            teamId,
+            organization,
         };
 
-        localStorage.setItem('access_token', 'demo-token-' + Date.now());
+        if (accessToken) {
+            localStorage.setItem('access_token', accessToken);
+        }
         localStorage.setItem('user', JSON.stringify(newUser));
         setUser(newUser);
     };

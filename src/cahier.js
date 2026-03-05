@@ -692,7 +692,7 @@ let CAHIER_SETTINGS = {};
         const missions = getVal('missions', taskDef.missions).split('\n').filter(Boolean);
         const livrables = getVal('livrables', taskDef.livrables).split('\n').filter(Boolean);
         const materials = getVal('materiel', MATERIAL_LIBRARY[type] || ['Matériel standard de chantier']).split('\n').filter(Boolean);
-        const hse = getVal('hse', taskDef.hse || ['Port des EPI obligatoire', 'Respect des normes NF C 15-100']).split('\n').filter(Boolean);
+        const hse = getVal('hse', taskDef.hse || ['Port des EPI obligatoire', 'Respect des normes NS 01-001']).split('\n').filter(Boolean);
         const jalons = getVal('jalons', taskDef.jalons || ['Démarrage sous 48h', 'Validation intermédiaire hebdomadaire']).split('\n').filter(Boolean);
         const kpis = getVal('kpi', taskDef.kpi || ['Qualité : 100% conformité', 'Délai : Respect du planning']).split('\n').filter(Boolean);
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     FileText, Download, Filter, Calendar, MapPin,
     CheckCircle2, BarChart3, Search, ChevronDown,
@@ -56,13 +56,21 @@ export default function Reports() {
         }
     };
 
-    const allStats = [
-        { label: 'Taux de Complétion', value: '84%', icon: CheckCircle2, color: 'text-emerald-500', lseVisible: true },
-        { label: 'Ménages Servis', value: households.length || '1 488', icon: Calendar, color: 'text-blue-500', lseVisible: true },
-        { label: 'Zones Actives', value: zones.length || 47, icon: MapPin, color: 'text-amber-500', lseVisible: true },
-        { label: 'Écarts Budgétaires', value: finances.devis?.marginPct ? `${finances.devis.marginPct.toFixed(1)}%` : '-2.4%', icon: BarChart3, color: 'text-indigo-500', lseVisible: false },
-    ];
-    const stats = allStats.filter(s => !isLSE || s.lseVisible);
+    const completionRate = useMemo(() => {
+        if (households.length === 0) return 0;
+        const done = households.filter(h => h.status === 'Terminé' || h.status === 'Conforme').length;
+        return Math.round((done / households.length) * 100);
+    }, [households]);
+
+    const stats = useMemo(() => {
+        const allStats = [
+            { label: 'Taux de Complétion', value: `${completionRate}%`, icon: CheckCircle2, color: 'text-emerald-500', lseVisible: true },
+            { label: 'Ménages Servis', value: households.length.toLocaleString('fr-FR') || '0', icon: Calendar, color: 'text-blue-500', lseVisible: true },
+            { label: 'Zones Actives', value: zones.length || 0, icon: MapPin, color: 'text-amber-500', lseVisible: true },
+            { label: 'Écarts Budgétaires', value: finances.devis?.marginPct ? `${finances.devis.marginPct.toFixed(1)}%` : '0%', icon: BarChart3, color: 'text-indigo-500', lseVisible: false },
+        ];
+        return allStats.filter(s => !isLSE || s.lseVisible);
+    }, [completionRate, households.length, zones.length, finances, isLSE]);
 
     const reportCards: ReportCard[] = [
         {
@@ -154,34 +162,34 @@ export default function Reports() {
             t === 'Excel' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400';
 
     return (
-        <div className="min-h-screen bg-slate-950 p-4 md:p-8">
+        <div className="p-4 md:p-8 pb-32">
             <div className="max-w-7xl mx-auto space-y-8">
 
                 {/* Header */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-                            <FileText className="text-white w-6 h-6" />
+                            <FileText className="text-slate-900 dark:text-white w-6 h-6" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-white tracking-tight">Rapports & Analyses</h1>
-                            <p className="text-slate-500 font-medium">Générez et exportez vos données de chantier</p>
+                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Rapports & Analyses</h1>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium">Générez et exportez vos données de chantier</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 w-4 h-4" />
                             <input
                                 type="text"
                                 placeholder="Rechercher un rapport..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="bg-slate-900 border border-slate-800 rounded-xl pl-12 pr-6 py-3 text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-none w-64 transition-all"
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-12 pr-6 py-3 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-none w-64 transition-all"
                             />
                         </div>
                         <button
                             title="Filtrer les rapports"
-                            className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+                            className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white transition-colors"
                         >
                             <Filter size={20} />
                         </button>
@@ -191,14 +199,14 @@ export default function Reports() {
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {stats.map((stat, i) => (
-                        <div key={i} className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800/50 hover:border-emerald-500/30 transition-all">
+                        <div key={i} className="glass-card bg-white/50 dark:bg-slate-900/50 p-6 border-slate-200 dark:border-slate-800/50 hover:border-emerald-500/30 transition-all">
                             <div className="flex items-center gap-4 mb-4">
-                                <div className={`w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center ${stat.color}`}>
+                                <div className={`w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-950 flex items-center justify-center ${stat.color}`}>
                                     <stat.icon size={20} />
                                 </div>
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
+                                <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{stat.label}</span>
                             </div>
-                            <p className="text-3xl font-black text-white">{stat.value}</p>
+                            <p className="text-3xl font-black text-slate-900 dark:text-white">{stat.value}</p>
                         </div>
                     ))}
                 </div>
@@ -206,8 +214,8 @@ export default function Reports() {
                 {/* Report Cards */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-slate-900/30 rounded-[2.5rem] border border-slate-800/50 p-8">
-                            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3">
+                        <div className="glass-card bg-white/30 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800/50 p-8">
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-8 flex items-center gap-3">
                                 <Printer className="text-emerald-500" />
                                 Modèles de Rapports Disponibles
                             </h3>
@@ -216,22 +224,22 @@ export default function Reports() {
                                     const state = states[report.id] || 'idle';
                                     const Icon = report.icon;
                                     return (
-                                        <div key={report.id} className={`group bg-slate-950/50 p-6 rounded-3xl border ${report.color} hover:scale-[1.01] transition-all cursor-pointer`}>
+                                        <div key={report.id} className={`group bg-slate-50 dark:bg-slate-950/50 p-6 rounded-2xl border ${report.color} hover:scale-[1.01] transition-all cursor-pointer`}>
                                             <div className="flex items-start justify-between mb-4">
-                                                <div className={`w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center ${report.textColor} group-hover:bg-slate-800 transition-all`}>
+                                                <div className={`w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 flex items-center justify-center ${report.textColor} group-hover:bg-slate-800 transition-all`}>
                                                     <Icon size={24} />
                                                 </div>
                                                 <span className={`text-[10px] font-black px-3 py-1 rounded-full ${typeColor(report.type)}`}>
                                                     {report.type}
                                                 </span>
                                             </div>
-                                            <h4 className="text-white font-bold mb-2 text-sm">{report.title}</h4>
-                                            <p className="text-slate-500 text-xs leading-relaxed mb-4">{report.desc}</p>
+                                            <h4 className="text-slate-900 dark:text-white font-bold mb-2 text-sm">{report.title}</h4>
+                                            <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed mb-4">{report.desc}</p>
 
                                             {/* Preview list */}
                                             <ul className="space-y-1 mb-5">
                                                 {report.preview.map((p, i) => (
-                                                    <li key={i} className="flex items-center gap-2 text-[11px] text-slate-400">
+                                                    <li key={i} className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
                                                         <CheckCircle2 size={11} className={report.textColor} />
                                                         {p}
                                                     </li>
@@ -242,9 +250,9 @@ export default function Reports() {
                                                 onClick={() => run(report.id, report.handler)}
                                                 disabled={state === 'loading'}
                                                 className={`w-full py-3 font-black rounded-xl transition-all flex items-center justify-center gap-2 text-sm
-                                                    ${state === 'done' ? 'bg-emerald-500 text-white border-emerald-400' :
+                                                    ${state === 'done' ? 'bg-emerald-500 text-slate-900 dark:text-white border-emerald-400' :
                                                         state === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                                                            'bg-slate-900 border border-slate-800 group-hover:bg-emerald-600 group-hover:border-emerald-500 group-hover:text-white text-slate-400'}`}
+                                                            'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 group-hover:bg-emerald-600 group-hover:border-emerald-500 group-hover:text-slate-900 dark:text-white text-slate-600 dark:text-slate-400'}`}
                                             >
                                                 {state === 'loading' ? <><Loader2 size={16} className="animate-spin" /> Génération...</> :
                                                     state === 'done' ? <><CheckCircle2 size={16} /> Téléchargé !</> :
@@ -260,34 +268,34 @@ export default function Reports() {
 
                     {/* Right column: Custom export */}
                     <aside className="lg:col-span-1">
-                        <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800/50 p-8 space-y-8 sticky top-8">
+                        <div className="glass-card bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800/50 p-8 space-y-8 sticky top-8">
                             <div>
-                                <h3 className="text-xl font-black text-white mb-2">Export Personnalisé</h3>
-                                <p className="text-slate-500 text-sm">Configurez un export sur mesure.</p>
+                                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Export Personnalisé</h3>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm">Configurez un export sur mesure.</p>
                             </div>
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block" htmlFor="export-format">Format de sortie</label>
+                                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block" htmlFor="export-format">Format de sortie</label>
                                     <div className="relative">
                                         <select
                                             id="export-format"
                                             title="Format d'export"
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-bold appearance-none focus:ring-2 focus:ring-emerald-500 outline-none"
+                                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white font-bold appearance-none focus:ring-2 focus:ring-emerald-500 outline-none"
                                         >
                                             <option>PDF (.pdf)</option>
                                             <option>Excel (.xlsx)</option>
                                             <option>JSON (.json)</option>
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 pointer-events-none" size={16} />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block" htmlFor="export-date">Date de référence</label>
+                                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block" htmlFor="export-date">Date de référence</label>
                                     <input
                                         id="export-date"
                                         type="date"
                                         title="Date du rapport"
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
                                     />
                                 </div>
                                 {!isLSE && (
@@ -295,15 +303,15 @@ export default function Reports() {
                                         <div className="w-5 h-5 rounded-md border-2 border-emerald-500 transition-all flex items-center justify-center bg-emerald-500/20">
                                             <div className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" />
                                         </div>
-                                        <span className="text-slate-300 font-medium text-sm">Résumé exécutif global</span>
+                                        <span className="text-slate-700 dark:text-slate-300 font-medium text-sm">Résumé exécutif global</span>
                                     </label>
                                 )}
                                 {isAdmin && (
                                     <label className="flex items-center gap-3 cursor-pointer group">
-                                        <div className="w-5 h-5 rounded-md border-2 border-slate-800 group-hover:border-emerald-500 transition-all flex items-center justify-center">
+                                        <div className="w-5 h-5 rounded-md border-2 border-slate-200 dark:border-slate-800 group-hover:border-emerald-500 transition-all flex items-center justify-center">
                                             <div className="w-2.5 h-2.5 rounded-sm opacity-0 group-hover:opacity-100 bg-emerald-500 transition-opacity" />
                                         </div>
-                                        <span className="text-slate-300 font-medium text-sm">Inclure données financières</span>
+                                        <span className="text-slate-700 dark:text-slate-300 font-medium text-sm">Inclure données financières</span>
                                     </label>
                                 )}
                             </div>
@@ -325,7 +333,7 @@ export default function Reports() {
                             <button
                                 onClick={() => run('avancement', () => generateRapportAvancement({ households, zones, userName: user?.name }))}
                                 disabled={states['avancement'] === 'loading'}
-                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-3"
+                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-900 dark:text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-3"
                             >
                                 {states['avancement'] === 'loading' ? <><Loader2 size={20} className="animate-spin" /> Génération...</> :
                                     <><Download size={20} /> Exporter les Données</>}

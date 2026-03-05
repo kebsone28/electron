@@ -1,4 +1,6 @@
 import prisma from '../../core/utils/prisma.js';
+import { pushSchema } from './sync.validation.js';
+import { socketService } from '../../services/socket.service.js';
 
 // @desc    Pull changes from server
 // @route   GET /api/sync/pull
@@ -10,7 +12,6 @@ export const pullChanges = async (req, res) => {
         const lastSync = since ? new Date(since) : new Date(0);
 
         // Fetch all changes for this organization since last sync
-        // In a real app, you would iterate over all relevant tables
         const projects = await prisma.project.findMany({
             where: {
                 organizationId,
@@ -18,12 +19,24 @@ export const pullChanges = async (req, res) => {
             }
         });
 
-        const households = await prisma.household.findMany({
+        const rawHouseholds = await prisma.household.findMany({
             where: {
                 organizationId,
                 updatedAt: { gt: lastSync }
+            },
+            include: {
+                zone: {
+                    select: { projectId: true }
+                }
             }
         });
+
+        // Flatten projectId for frontend compatibility
+        const households = rawHouseholds.map(h => ({
+            ...h,
+            projectId: h.zone?.projectId,
+            zone: undefined // Remove nested object to save bandwidth
+        }));
 
         const zones = await prisma.zone.findMany({
             where: {
@@ -55,61 +68,196 @@ export const pullChanges = async (req, res) => {
     }
 };
 
-// @desc    Push changes to server
-// @route   POST /api/sync/push
 export const pushChanges = async (req, res) => {
-    try {
-        const { organizationId } = req.user;
-        const { changes } = req.body; // { households: [...], projects: [...] }
+    const { organizationId, id: userId } = req.user;
+    const { changes } = req.body;
 
-        const results = {
-            success: [],
-            conflicts: []
-        };
+    console.log(`[SYNC-DEBUG] 🔄 Start Push for Organization: ${organizationId} (User: ${userId})`);
 
-        // Transactional batch update
-        await prisma.$transaction(async (tx) => {
-            // Processing Households as an example
-            if (changes.households) {
-                for (const h of changes.households) {
-                    // 1. Get current server version
-                    const serverH = await tx.household.findUnique({ where: { id: h.id } });
+    // Log payload summary for diagnostic
+    const payloadSize = JSON.stringify(req.body).length;
+    console.log(`[SYNC-DEBUG] Payload Size: ${(payloadSize / 1024).toFixed(2)} KB`);
 
-                    if (serverH && serverH.version !== h.version) {
-                        results.conflicts.push({ id: h.id, type: 'household', serverVersion: serverH });
-                        continue;
-                    }
+    const results = {
+        success: [],
+        conflicts: [],
+        errors: []
+    };
 
-                    // 2. Upsert (update version on server)
-                    const updated = await tx.household.upsert({
-                        where: { id: h.id },
-                        update: {
-                            ...h,
-                            organizationId,
-                            version: h.version + 1,
-                            updatedAt: new Date()
-                        },
-                        create: {
-                            ...h,
-                            organizationId,
-                            version: 1,
-                            updatedAt: new Date()
-                        }
-                    });
-                    results.success.push({ id: updated.id, type: 'household' });
-                }
-            }
-
-            // Repeat for projects, zones, etc.
-        });
-
-        res.json({
-            message: 'Push processed',
-            results
-        });
-
-    } catch (error) {
-        console.error('Sync push error:', error);
-        res.status(500).json({ error: 'Failed to push changes' });
+    if (!changes) {
+        return res.status(400).json({ error: 'No changes provided' });
     }
+
+    // --- NEW: Schema Validation Layer ---
+    const { error: validationError } = pushSchema.validate({ changes }, { abortEarly: false });
+    if (validationError) {
+        console.warn(`[SYNC-VALIDATION-WARNING] Schema mismatch detected:`, validationError.details.length, 'errors');
+        // We don't block the whole sync if some metadata is wrong, but we log it.
+        // For critical missing fields (IDs), the individual loops below will catch them.
+    }
+
+    // Process each entity type sequentially but NOT in a single transaction
+    // to avoid rolling back everything if one record is bad.
+
+    // 0. Sync Projects
+    if (changes.projects?.length > 0) {
+        console.log(`[SYNC-DEBUG] Processing ${changes.projects.length} projects...`);
+        for (const p of changes.projects) {
+            const { id, name, status, budget, duration, totalHouses, config, version } = p;
+            if (!id) continue;
+            try {
+                await prisma.project.upsert({
+                    where: { id },
+                    update: {
+                        name,
+                        status: status || 'active',
+                        budget: budget ? String(budget) : "0", // Decimal fields accept strings reliably
+                        duration: parseInt(duration) || 0,
+                        totalHouses: parseInt(totalHouses) || 0,
+                        config: config || {},
+                        updatedAt: new Date(),
+                        version: (parseInt(version) || 1) + 1
+                    },
+                    create: {
+                        id,
+                        name,
+                        organizationId,
+                        status: status || 'active',
+                        budget: budget ? String(budget) : "0",
+                        duration: parseInt(duration) || 0,
+                        totalHouses: parseInt(totalHouses) || 0,
+                        config: config || {},
+                        version: 1
+                    }
+                });
+                results.success.push({ id, type: 'project' });
+            } catch (e) {
+                console.error(`[SYNC-ERROR] Project [${id}]:`, e.message);
+                results.errors.push({ id, type: 'project', error: e.message });
+            }
+        }
+    }
+
+    // 1. Sync Zones
+    if (changes.zones?.length > 0) {
+        console.log(`[SYNC-DEBUG] Processing ${changes.zones.length} zones...`);
+        for (const z of changes.zones) {
+            const { id, name, projectId, metadata } = z;
+            if (!id || !projectId) {
+                results.errors.push({ id, type: 'zone', error: 'Missing ID or ProjectID' });
+                continue;
+            }
+            try {
+                // Verify project exists or just try upsert (Prisma will throw if foreign key fails)
+                await prisma.zone.upsert({
+                    where: { id },
+                    update: { name, metadata: metadata || {}, updatedAt: new Date() },
+                    create: { id, name, projectId, organizationId, metadata: metadata || {} }
+                });
+                results.success.push({ id, type: 'zone' });
+            } catch (e) {
+                console.error(`[SYNC-ERROR] Zone [${id}]:`, e.message);
+                results.errors.push({ id, type: 'zone', error: e.message });
+            }
+        }
+    }
+
+    // 2. Sync Households
+    if (changes.households?.length > 0) {
+        console.log(`[SYNC-DEBUG] Processing ${changes.households.length} households...`);
+        for (const h of changes.households) {
+            const { id, zoneId, status, location, owner, koboData, version } = h;
+            if (!id || !zoneId) {
+                results.errors.push({ id, type: 'household', error: 'Missing ID or ZoneID' });
+                continue;
+            }
+            try {
+                const serverH = await prisma.household.findUnique({ where: { id } });
+                if (serverH && serverH.version > (parseInt(version) || 0)) {
+                    results.conflicts.push({ id, type: 'household', server: serverH });
+                    continue;
+                }
+
+                await prisma.household.upsert({
+                    where: { id },
+                    update: {
+                        status: status || 'planned',
+                        location: location || {},
+                        owner: owner || {},
+                        koboData: koboData || {},
+                        version: (parseInt(version) || 0) + 1,
+                        updatedAt: new Date()
+                    },
+                    create: {
+                        id,
+                        zoneId,
+                        organizationId,
+                        status: status || 'planned',
+                        location: location || {},
+                        owner: owner || {},
+                        koboData: koboData || {},
+                        version: 1
+                    }
+                });
+                results.success.push({ id, type: 'household' });
+            } catch (e) {
+                console.error(`[SYNC-ERROR] Household [${id}]:`, e.message);
+                results.errors.push({ id, type: 'household', error: e.message });
+            }
+        }
+    }
+
+    // 3. Sync Teams
+    if (changes.teams?.length > 0) {
+        console.log(`[SYNC-DEBUG] Processing ${changes.teams.length} teams...`);
+        for (const t of changes.teams) {
+            const { id, name, type, status } = t;
+            if (!id) continue;
+            try {
+                await prisma.team.upsert({
+                    where: { id },
+                    update: {
+                        name,
+                        type: type || 'field',
+                        status: status || 'active',
+                        updatedAt: new Date()
+                    },
+                    create: {
+                        id,
+                        name,
+                        type: type || 'field',
+                        organizationId,
+                        status: status || 'active'
+                    }
+                });
+                results.success.push({ id, type: 'team' });
+            } catch (e) {
+                console.error(`[SYNC-ERROR] Team [${id}]:`, e.message);
+                results.errors.push({ id, type: 'team', error: e.message });
+            }
+        }
+    }
+
+    console.log(`[SYNC-DEBUG] ✅ Push complete. Success: ${results.success.length}, Errors: ${results.errors.length}`);
+
+    // Broadcast real-time notification to all connected clients except sender
+    if (results.success.length > 0) {
+        socketService.emit('notification', {
+            type: 'SYNC',
+            message: `${results.success.length} changements enregistrés par ${req.user.firstName || 'un utilisateur'}`,
+            data: { user: req.user.id, results: results.success.length }
+        });
+    }
+
+    // Still return 200/201 even if some records had errors, but report them.
+    // However, if EVERY record failed, we might want to return 500 or 207 Multi-status.
+    res.json({
+        message: 'Push processing complete',
+        summary: {
+            successCount: results.success.length,
+            conflictCount: results.conflicts.length,
+            errorCount: results.errors.length
+        },
+        results
+    });
 };

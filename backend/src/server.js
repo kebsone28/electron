@@ -1,6 +1,8 @@
+import http from 'http';
 import app from './app.js';
 import { config } from './core/config/config.js';
 import prisma from './core/utils/prisma.js';
+import { socketService } from './services/socket.service.js';
 
 async function startServer() {
   try {
@@ -8,7 +10,10 @@ async function startServer() {
     // await prisma.$connect();
     // console.log('✅ Connected to PostgreSQL database');
 
-    app.listen(config.port, () => {
+    const server = http.createServer(app);
+    socketService.init(server);
+
+    server.listen(config.port, () => {
       console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
       console.log(`📡 API Health: http://localhost:${config.port}/health`);
     });

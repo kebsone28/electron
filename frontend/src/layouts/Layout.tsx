@@ -2,9 +2,11 @@ import React from 'react';
 import Sidebar from '../components/Sidebar';
 import SyncAlertBanner from '../components/SyncAlertBanner';
 import { useTheme } from '../context/ThemeContext';
+import { useWebSockets } from '../hooks/useWebSockets';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
     const { isDarkMode } = useTheme();
+    useWebSockets();
 
     return (
         <div className={`min-h-screen flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-dark-bg text-dark-text' : 'bg-surface text-text'}`}>

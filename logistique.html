@@ -10,8 +10,8 @@
     <link rel="stylesheet" href="src/ui/GrappeAssignmentUI.css">
     <link rel="stylesheet" href="src/dark.css">
     <link rel="stylesheet" href="src/nav.css">
-    <script src="/ApiService.js"></script>
-    <script src="/AuthGuard.js"></script>
+    <script src="src/infrastructure/external/ApiService.js"></script>
+    <script src="src/infrastructure/external/AuthGuard.js"></script>
     <link rel="stylesheet" href="vendor/sweetalert2/sweetalert2.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -285,7 +285,7 @@
                         <option value="all">Tous les statuts</option>
                         <option value="ready_for_control" class="text-indigo-600">✨ Prêt pour Contrôle (75%+)</option>
                         <option value="incomplete" class="text-amber-600">Incomplet (&lt;100%)</option>
-                        <option value="high_risk" class="text-rose-600">⚠ Risque Élevé (Index > 70)</option>
+                        <option value="high_risk" class="text-rose-600">⚠ Risque Élevé (Index &gt; 70)</option>
                         <option value="missing_control" class="text-rose-500">Sans Contrôle</option>
                         <option value="complete" class="text-emerald-600">Terminé (100%)</option>
                     </select>
@@ -401,7 +401,7 @@
                         <button onclick="checkDataHealth()"
                             class="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
                             title="Vérifier l'intégrité">
-                            <i class="fas fa- stethoscope"></i>
+                            <i class="fas fa-stethoscope"></i>
                         </button>
                     </div>
                 </div>
@@ -552,9 +552,6 @@
         </div>
     </div>
 
-    </div>
-
-
     <!-- 🚀 Système de Modal Saas-Grade Robuste -->
     <div id="globalModal" class="hidden fixed inset-0 z-50 overflow-hidden" aria-hidden="true">
         <div class="modal-overlay"></div>
@@ -636,7 +633,7 @@
         // Stub: if not loaded by modules, provide minimal class skeleton
         if (typeof GrappeAssignmentModel === 'undefined') {
             window.GrappeAssignmentModel = class {
-                constructor() {}
+                constructor() { }
             };
         }
     </script>

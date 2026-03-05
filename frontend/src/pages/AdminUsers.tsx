@@ -1,157 +1,375 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../store/db';
+import type { UserRole, User as ManagedUser } from '../utils/types';
 import {
     Users, Plus, Edit3, Trash2, ShieldCheck, Shield, User,
-    Eye, EyeOff, Save, X, Search, Lock, CheckCircle2, AlertTriangle
+    Eye, EyeOff, Save, X, Search, Lock, CheckCircle2,
+    AlertTriangle, UserCheck, UserX, RefreshCw
 } from 'lucide-react';
-import type { UserRole } from '../utils/types';
+import { appSecurity } from '../services/appSecurity';
+import { useEffect } from 'react';
 
-// ─── Types ────────────────────────────────────────────────────────
-interface ManagedUser {
-    id: string;
-    username: string;
-    password: string;
-    role: UserRole;
-    name: string;
-    teamId?: string;
-    active: boolean;
-    createdAt: string;
-    requires2FA?: boolean;
-}
+// Les constantes statiques de sécurité sont gérées par appSecurity
 
-// ─── Initial seeded users from mockUsers.ts ────────────────────────
-const INITIAL_USERS: ManagedUser[] = [
-    { id: '1', username: 'admingem', password: '1995@PROQUELEC@2026', role: 'ADMIN_PROQUELEC', name: 'Administrateur PROQUELEC', active: true, createdAt: '2026-01-01', requires2FA: true },
-    { id: '2', username: 'dggem', password: 'GEMDG2026', role: 'DG_PROQUELEC', name: 'DG PROQUELEC', active: true, createdAt: '2026-01-01' },
-    { id: '3', username: 'gemlse', password: 'LSEGEM2026', role: 'CLIENT_LSE', name: 'Client LSE', active: true, createdAt: '2026-01-15' },
-    { id: '4', username: 'maçongem', password: 'GEMMA2026', role: 'CHEF_EQUIPE', name: 'Chef Maçons', active: true, createdAt: '2026-01-10', teamId: 'team_macons' },
-    { id: '5', username: 'reseaugem', password: 'GEMRE2026', role: 'CHEF_EQUIPE', name: 'Chef Réseau', active: true, createdAt: '2026-01-10', teamId: 'team_reseau' },
-    { id: '6', username: 'electriciengem', password: 'GEMELEC2026', role: 'CHEF_EQUIPE', name: 'Chef Électricien', active: true, createdAt: '2026-01-10', teamId: 'team_interieur' },
-    { id: '7', username: 'livreurgem', password: 'gemliv2026', role: 'CHEF_EQUIPE', name: 'Chef Livreur', active: true, createdAt: '2026-01-20', teamId: 'team_livraison' },
-];
-
-const ROLE_CONFIG: Record<UserRole, { label: string; color: string; textColor: string; icon: typeof Shield; description: string }> = {
+// ─── Config rôles ───────────────────────────────────────────────────────────
+const ROLE_CONFIG: Record<UserRole, {
+    label: string; color: string; textColor: string;
+    icon: typeof Shield; description: string
+}> = {
     ADMIN_PROQUELEC: { label: 'Admin', color: 'bg-indigo-500/15 border-indigo-500/40', textColor: 'text-indigo-400', icon: ShieldCheck, description: 'Accès complet + 2FA' },
     DG_PROQUELEC: { label: 'DG', color: 'bg-emerald-500/15 border-emerald-500/40', textColor: 'text-emerald-400', icon: Shield, description: 'Finances + Rapports' },
     CLIENT_LSE: { label: 'Client LSE', color: 'bg-amber-500/15 border-amber-500/40', textColor: 'text-amber-400', icon: User, description: 'Carte + Avancement' },
     CHEF_EQUIPE: { label: 'Chef Équipe', color: 'bg-blue-500/15 border-blue-500/40', textColor: 'text-blue-400', icon: Users, description: 'Dashboard Équipe' },
 };
 
-const TEAMS = [
-    { id: 'team_macons', label: 'Équipe Maçons' },
-    { id: 'team_reseau', label: 'Équipe Réseau' },
-    { id: 'team_interieur', label: 'Équipe Électricien' },
-    { id: 'team_livraison', label: 'Équipe Livreur' },
-    { id: 'team_controle', label: 'Équipe Contrôle' },
-];
-
 const emptyForm = (): Omit<ManagedUser, 'id' | 'createdAt'> => ({
-    username: '', password: '', role: 'CHEF_EQUIPE', name: '', teamId: undefined, active: true, requires2FA: false,
+    email: '', password: '', role: 'CHEF_EQUIPE', name: '', teamId: undefined, active: true, requires2FA: false,
 });
 
+// ─── Toast ───────────────────────────────────────────────────────────────────
+type ToastType = 'success' | 'error' | 'info' | 'warning';
+interface Toast { id: number; msg: string; type: ToastType }
+
+let _toastId = 0;
+
+// ─── Composant principal ─────────────────────────────────────────────────────
 export default function AdminUsers() {
-    const [users, setUsers] = useState<ManagedUser[]>(INITIAL_USERS);
+    const users = useLiveQuery(() => db.users.toArray()) || [];
+    const teams = useLiveQuery(() => db.teams.toArray()) || [];
+
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [form, setForm] = useState(emptyForm());
     const [showPass, setShowPass] = useState(false);
-    const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-    const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+    const [toasts, setToasts] = useState<Toast[]>([]);
 
-    const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 3000);
+    // ── Delete modal state ──
+    const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
+    const [delPass, setDelPass] = useState('');
+    const [delAnswer, setDelAnswer] = useState('');
+    const [delStep, setDelStep] = useState<1 | 2>(1);
+    const [delError, setDelError] = useState('');
+    const [showDelPass, setShowDelPass] = useState(false);
+    const [activeSecurityQuestion, setActiveSecurityQuestion] = useState('');
+
+    // Load question on mount or change
+    useEffect(() => {
+        appSecurity.get('securityQuestion').then(setActiveSecurityQuestion);
+    }, []);
+
+    // ── Password reset modal ──
+    const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [showNewPass, setShowNewPass] = useState(false);
+
+    // ─── Toast helpers ────────────────────────────────────────────────────────
+    const addToast = (msg: string, type: ToastType = 'success') => {
+        const id = ++_toastId;
+        setToasts(prev => [...prev, { id, msg, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     };
 
-    const filtered = users.filter(u =>
-        u.username.toLowerCase().includes(search.toLowerCase()) ||
+    // ─── Filtering ────────────────────────────────────────────────────────────
+    const filtered = users.filter((u: ManagedUser) =>
+        u.email.toLowerCase().includes(search.toLowerCase()) ||
         u.name.toLowerCase().includes(search.toLowerCase()) ||
         u.role.toLowerCase().includes(search.toLowerCase())
     );
 
+    // ─── Open form (create / edit) ────────────────────────────────────────────
     const openAdd = () => {
-        setEditId(null);
-        setForm(emptyForm());
-        setShowForm(true);
-        setShowPass(false);
+        setEditId(null); setForm(emptyForm()); setShowForm(true); setShowPass(false);
     };
-
     const openEdit = (u: ManagedUser) => {
         setEditId(u.id);
-        setForm({ username: u.username, password: u.password, role: u.role, name: u.name, teamId: u.teamId, active: u.active, requires2FA: u.requires2FA });
-        setShowForm(true);
-        setShowPass(false);
+        setForm({ email: u.email, password: u.password, role: u.role, name: u.name, teamId: u.teamId, active: u.active, requires2FA: u.requires2FA });
+        setShowForm(true); setShowPass(false);
     };
 
-    const saveUser = () => {
-        if (!form.username.trim() || !form.password.trim() || !form.name.trim()) {
-            showToast('Tous les champs obligatoires doivent être remplis.', 'error');
+    // ─── Save (create / update) ───────────────────────────────────────────────
+    const saveUser = async () => {
+        if (!form.email.trim() || !form.password?.trim() || !form.name.trim()) {
+            addToast('Tous les champs obligatoires doivent être remplis.', 'error'); return;
+        }
+        if ((form.password?.length ?? 0) < 6) {
+            addToast('Le mot de passe doit faire au moins 6 caractères.', 'error'); return;
+        }
+        try {
+            if (editId) {
+                await db.users.update(editId, form);
+                addToast(`✏️  Compte "${form.name}" mis à jour avec succès.`, 'success');
+            } else {
+                const newUser: ManagedUser = {
+                    ...form,
+                    id: Date.now().toString(),
+                    createdAt: new Date().toISOString().split('T')[0],
+                };
+                await db.users.add(newUser);
+                addToast(`✅  Compte "${form.name}" créé avec succès.`, 'success');
+            }
+            setShowForm(false);
+        } catch {
+            addToast('❌  Erreur lors de l\'enregistrement.', 'error');
+        }
+    };
+
+    // ─── Open delete modal ────────────────────────────────────────────────────
+    const openDelete = (u: ManagedUser) => {
+        if (u.id === '1') { addToast('Impossible de supprimer le compte Admin principal.', 'error'); return; }
+        setDeleteTarget(u);
+        setDelPass(''); setDelAnswer(''); setDelError('');
+        setDelStep(u.role === 'ADMIN_PROQUELEC' ? 1 : 1);
+        setShowDelPass(false);
+    };
+
+    // ─── Confirm delete: step 1 (password) ────────────────────────────────────
+    const confirmDelStep1 = async () => {
+        if (!deleteTarget) return;
+        // Non-admin: direct delete
+        if (deleteTarget.role !== 'ADMIN_PROQUELEC') {
+            executeDelete();
             return;
         }
-        if (form.password.length < 6) {
-            showToast('Le mot de passe doit faire au moins 6 caractères.', 'error');
+        // Admin: check password first
+        const ok = await appSecurity.check('adminPassword', delPass);
+        if (!ok) {
+            setDelError('Mot de passe incorrect. Veuillez réessayer.');
             return;
         }
-        if (editId) {
-            setUsers(prev => prev.map(u => u.id === editId ? { ...u, ...form } : u));
-            showToast(`Compte "${form.username}" mis à jour avec succès.`);
-        } else {
-            const newUser: ManagedUser = {
-                ...form,
-                id: Date.now().toString(),
-                createdAt: new Date().toISOString().split('T')[0],
-            };
-            setUsers(prev => [...prev, newUser]);
-            showToast(`Compte "${form.username}" créé avec succès.`);
+        setDelError('');
+        setDelStep(2);
+    };
+
+    // ─── Confirm delete: step 2 (security question) ───────────────────────────
+    const confirmDelStep2 = async () => {
+        const ok = await appSecurity.check('securityAnswer', delAnswer, true);
+        if (!ok) {
+            setDelError('Réponse incorrecte. Suppression annulée.');
+            return;
         }
-        setShowForm(false);
+        executeDelete();
     };
 
-    const deleteUser = (id: string) => {
-        if (id === '1') { showToast('Impossible de supprimer le compte Admin principal.', 'error'); return; }
-        setUsers(prev => prev.filter(u => u.id !== id));
-        showToast('Compte supprimé.');
-        setConfirmDelete(null);
+    const executeDelete = async () => {
+        if (!deleteTarget) return;
+        const name = deleteTarget.name;
+        await db.users.delete(deleteTarget.id);
+        addToast(`🗑️  Compte "${name}" supprimé définitivement.`, 'warning');
+        setDeleteTarget(null);
     };
 
-    const toggleActive = (id: string) => {
-        if (id === '1') { showToast('Impossible de désactiver le compte Admin principal.', 'error'); return; }
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, active: !u.active } : u));
+    // ─── Toggle active ────────────────────────────────────────────────────────
+    const toggleActive = async (u: ManagedUser) => {
+        if (u.id === '1') { addToast('Impossible de désactiver le compte Admin principal.', 'error'); return; }
+        const next = !u.active;
+        await db.users.update(u.id, { active: next });
+        addToast(
+            next ? `▶️  Compte "${u.name}" activé.` : `⏸️  Compte "${u.name}" désactivé.`,
+            next ? 'success' : 'info'
+        );
     };
 
+    // ─── Quick password reset ────────────────────────────────────────────────
+    const openReset = (u: ManagedUser) => {
+        setResetTarget(u); setNewPassword(''); setShowNewPass(false);
+    };
+    const saveReset = async () => {
+        if (!resetTarget) return;
+        if (newPassword.length < 6) { addToast('Le mot de passe doit faire au moins 6 caractères.', 'error'); return; }
+        await db.users.update(resetTarget.id, { password: newPassword });
+        addToast(`🔑  Mot de passe de "${resetTarget.name}" réinitialisé.`, 'success');
+        setResetTarget(null);
+    };
+
+    // ─── Role stats ──────────────────────────────────────────────────────────
     const roleStats = Object.entries(ROLE_CONFIG).map(([role, cfg]) => ({
-        ...cfg, role, count: users.filter(u => u.role === role).length,
+        ...cfg, role, count: users.filter((u: ManagedUser) => u.role === role).length,
     }));
+
+    const isAdminDelete = deleteTarget?.role === 'ADMIN_PROQUELEC';
 
     return (
         <div className="min-h-screen bg-slate-950 p-4 md:p-8">
 
-            {/* Toast */}
-            {toast && (
-                <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm transition-all
-                    ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-                    {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                    {toast.msg}
-                </div>
-            )}
+            {/* ── Toast Stack ── */}
+            <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
+                {toasts.map(t => (
+                    <div key={t.id} className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm pointer-events-auto animate-in slide-in-from-right-4 duration-300 ${t.type === 'success' ? 'bg-emerald-600 text-white' :
+                        t.type === 'error' ? 'bg-red-600 text-white' :
+                            t.type === 'warning' ? 'bg-amber-500 text-white' :
+                                'bg-indigo-600 text-white'
+                        }`}>
+                        {t.type === 'success' ? <CheckCircle2 size={16} /> :
+                            t.type === 'error' ? <AlertTriangle size={16} /> :
+                                t.type === 'warning' ? <AlertTriangle size={16} /> :
+                                    <CheckCircle2 size={16} />}
+                        {t.msg}
+                    </div>
+                ))}
+            </div>
 
-            {/* Confirm Delete */}
-            {confirmDelete && (
-                <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-sm w-full shadow-2xl">
-                        <div className="w-14 h-14 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <Trash2 className="text-red-400" size={24} />
+            {/* ── Delete Modal ── */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-[4000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-md w-full shadow-2xl">
+                        {/* Header */}
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-12 h-12 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center shrink-0">
+                                <Trash2 className="text-red-400" size={22} />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-black text-xl">
+                                    {isAdminDelete ? 'Suppression compte Admin' : 'Supprimer ce compte ?'}
+                                </h3>
+                                <p className="text-slate-400 text-sm">
+                                    {isAdminDelete
+                                        ? `Étape ${delStep}/2 — Vérification requise`
+                                        : 'Cette action est irréversible.'}
+                                </p>
+                            </div>
                         </div>
-                        <h3 className="text-white font-black text-xl text-center mb-2">Supprimer ce compte ?</h3>
-                        <p className="text-slate-400 text-sm text-center mb-6">Cette action est irréversible.</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-all">Annuler</button>
-                            <button onClick={() => deleteUser(confirmDelete)} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black hover:bg-red-500 transition-all">Supprimer</button>
-                        </div>
+
+                        <form onSubmit={(e) => { e.preventDefault(); if (isAdminDelete) { if (delStep === 1) confirmDelStep1(); else confirmDelStep2(); } else executeDelete(); }}>
+                            {/* Warning banner */}
+                            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 mb-6">
+                                <p className="text-red-300 text-sm font-bold">
+                                    Vous allez supprimer le compte de{' '}
+                                    <span className="italic">"{deleteTarget.name}"</span>
+                                    {isAdminDelete && ' (Administrateur)'}
+                                    . Cette action est définitive.
+                                </p>
+                            </div>
+
+                            {/* Step progress for admin */}
+                            {isAdminDelete && (
+                                <div className="flex items-center gap-2 mb-6">
+                                    {[1, 2].map(s => (
+                                        <div key={s} className={`flex-1 h-1.5 rounded-full transition-all ${s < delStep ? 'bg-emerald-500' : s === delStep ? 'bg-indigo-500' : 'bg-slate-700'
+                                            }`} />
+                                    ))}
+                                    <span className="text-xs text-slate-500 font-bold ml-1">{delStep}/2</span>
+                                </div>
+                            )}
+
+                            {/* Step 1: Password (admin) OR direct (non-admin) */}
+                            {(!isAdminDelete || delStep === 1) && (
+                                <div className="space-y-4">
+                                    {isAdminDelete && (
+                                        <>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">
+                                                Étape 1 — Mot de passe administrateur
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showDelPass ? 'text' : 'password'}
+                                                    value={delPass}
+                                                    onChange={e => { setDelPass(e.target.value); setDelError(''); }}
+                                                    placeholder="Votre mot de passe admin"
+                                                    title="Mot de passe administrateur"
+                                                    autoComplete="current-password"
+                                                    autoFocus
+                                                    className={`w-full bg-slate-950 border rounded-xl px-4 py-3 pr-12 text-white font-mono font-medium placeholder:text-slate-600 outline-none transition-all focus:ring-2 ${delError ? 'border-red-500 focus:ring-red-500/30' : 'border-slate-800 focus:ring-indigo-500/30'}`}
+                                                />
+                                                <button type="button" title="Afficher/masquer" onClick={() => setShowDelPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200">
+                                                    {showDelPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                    {delError && <p className="text-red-400 text-xs font-bold">{delError}</p>}
+                                    <div className="flex gap-3 pt-2">
+                                        <button type="button" onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-all">
+                                            Annuler
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black transition-all active:scale-95 shadow-lg shadow-red-600/20"
+                                        >
+                                            {isAdminDelete ? 'Vérifier →' : 'Supprimer'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Step 2: Security question (admin only) */}
+                            {isAdminDelete && delStep === 2 && (
+                                <div className="space-y-4">
+                                    <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                                        <p className="text-indigo-300 text-xs font-black uppercase tracking-widest mb-1">Question de sécurité</p>
+                                        <p className="text-white font-bold text-sm">{activeSecurityQuestion}</p>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={delAnswer}
+                                        onChange={e => { setDelAnswer(e.target.value); setDelError(''); }}
+                                        placeholder="Votre réponse..."
+                                        title="Réponse à la question de sécurité"
+                                        autoComplete="off"
+                                        autoFocus
+                                        className={`w-full bg-slate-950 border rounded-xl px-4 py-3 text-white font-medium placeholder:text-slate-600 outline-none transition-all focus:ring-2 ${delError ? 'border-red-500 focus:ring-red-500/30' : 'border-slate-800 focus:ring-indigo-500/30'}`}
+                                    />
+                                    {delError && <p className="text-red-400 text-xs font-bold">{delError}</p>}
+                                    <div className="flex gap-3 pt-2">
+                                        <button type="button" onClick={() => { setDelStep(1); setDelError(''); setDelAnswer(''); }} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-all">
+                                            ← Retour
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black transition-all active:scale-95 shadow-lg shadow-red-600/20"
+                                        >
+                                            Supprimer définitivement
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </form>
                     </div>
                 </div>
             )}
 
+            {/* ── Reset Password Modal ── */}
+            {resetTarget && (
+                <div className="fixed inset-0 z-[4000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-sm w-full shadow-2xl">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 bg-indigo-500/15 rounded-xl flex items-center justify-center">
+                                <RefreshCw size={18} className="text-indigo-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-black">Réinitialiser le mot de passe</h3>
+                                <p className="text-slate-400 text-xs">{resetTarget.name}</p>
+                            </div>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); saveReset(); }}>
+                            <div className="relative mb-4">
+                                <input
+                                    type={showNewPass ? 'text' : 'password'}
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                    placeholder="Nouveau mot de passe (min. 6 car.)"
+                                    title="Nouveau mot de passe"
+                                    autoComplete="new-password"
+                                    autoFocus
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-white font-mono font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                />
+                                <button type="button" title="Afficher/masquer" onClick={() => setShowNewPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200">
+                                    {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setResetTarget(null)} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-all">Annuler</button>
+                                <button type="submit" className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                                    <Save size={14} /> Enregistrer
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Main ── */}
             <div className="max-w-7xl mx-auto space-y-8">
 
                 {/* Header */}
@@ -162,12 +380,12 @@ export default function AdminUsers() {
                         </div>
                         <div>
                             <h1 className="text-3xl font-black text-white tracking-tight">Gestion des Utilisateurs</h1>
-                            <p className="text-slate-500 font-medium">{users.length} compte(s) enregistré(s) — Réservé Admin</p>
+                            <p className="text-slate-500 font-medium">{users.length} compte(s) — {users.filter((u: ManagedUser) => u.active).length} actif(s) — Réservé Admin</p>
                         </div>
                     </div>
                     <button
                         onClick={openAdd}
-                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/25"
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
                     >
                         <Plus size={20} /> Nouveau Compte
                     </button>
@@ -196,83 +414,98 @@ export default function AdminUsers() {
                     <input
                         type="text"
                         placeholder="Rechercher un compte..."
+                        title="Rechercher par nom, identifiant ou rôle"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-12 pr-4 py-3 text-white font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     />
                 </div>
 
-                {/* User list */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {filtered.map(u => {
-                        const rc = ROLE_CONFIG[u.role];
-                        const RoleIcon = rc.icon;
-                        return (
-                            <div key={u.id} className={`bg-slate-900/60 rounded-3xl border transition-all ${u.active ? 'border-slate-800/60 hover:border-indigo-500/30' : 'border-slate-800/30 opacity-50'}`}>
-                                <div className="p-6">
-                                    {/* Top row */}
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className={`w-12 h-12 rounded-2xl ${rc.color} border flex items-center justify-center`}>
-                                            <RoleIcon size={20} className={rc.textColor} />
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            {u.requires2FA && (
-                                                <span className="text-[9px] font-black bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">2FA</span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${rc.color} ${rc.textColor} border`}>
+                {/* User table */}
+                <div className="card overflow-x-auto">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Statut</th>
+                                <th>Utilisateur</th>
+                                <th>Identifiant (Login)</th>
+                                <th>Rôle</th>
+                                <th>Équipe / Accès</th>
+                                <th>Mot de passe</th>
+                                <th>Création</th>
+                                <th className="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filtered.map(u => {
+                                const rc = ROLE_CONFIG[u.role as UserRole] || ROLE_CONFIG.CHEF_EQUIPE;
+                                const RoleIcon = rc.icon;
+                                return (
+                                    <tr key={u.id} className={!u.active ? 'opacity-50' : ''}>
+                                        <td className="w-12 text-center">
+                                            <div
+                                                className={`status-dot ${u.active ? 'online' : 'offline'} cursor-pointer hover:scale-125 transition-transform`}
+                                                title={u.active ? 'Actif — cliquer pour désactiver' : 'Désactivé — cliquer pour activer'}
+                                                onClick={() => toggleActive(u)}
+                                            />
+                                        </td>
+                                        <td className="font-bold">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-6 h-6 rounded border flex items-center justify-center ${rc.color}`}>
+                                                    <RoleIcon size={12} className={rc.textColor} />
+                                                </div>
+                                                {u.name}
+                                                {u.requires2FA && <span className="text-[9px] font-black bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-md">2FA</span>}
+                                            </div>
+                                        </td>
+                                        <td className="font-mono text-slate-500">@{u.email}</td>
+                                        <td>
+                                            <span className={`badge ${u.role.includes('ADMIN') ? 'badge-primary' : u.role.includes('CHEF') ? 'badge-success' : 'badge-warning'}`}>
                                                 {rc.label}
                                             </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Info */}
-                                    <h3 className="text-white font-black text-base mb-0.5">{u.name}</h3>
-                                    <p className="text-slate-400 font-mono text-sm mb-1">@{u.username}</p>
-                                    {u.teamId && (
-                                        <p className="text-[11px] text-slate-500 mb-2">
-                                            🏷 {TEAMS.find(t => t.id === u.teamId)?.label ?? u.teamId}
-                                        </p>
-                                    )}
-                                    <p className="text-[10px] text-slate-600 mb-4">Créé le {u.createdAt}</p>
-
-                                    {/* Password hint */}
-                                    <div className="flex items-center gap-2 bg-slate-950/60 rounded-xl px-3 py-2 mb-5">
-                                        <Lock size={12} className="text-slate-500" />
-                                        <span className="text-slate-500 text-[11px] font-mono flex-1">{'•'.repeat(Math.min(u.password.length, 12))}</span>
-                                        <span className="text-[9px] text-slate-600">{u.password.length} car.</span>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => openEdit(u)}
-                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl font-bold text-xs transition-all"
-                                        >
-                                            <Edit3 size={13} /> Modifier
-                                        </button>
-                                        <button
-                                            onClick={() => toggleActive(u.id)}
-                                            title={u.active ? 'Désactiver' : 'Activer'}
-                                            className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-all border ${u.active ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}
-                                        >
-                                            {u.active ? '⏸' : '▶'}
-                                        </button>
-                                        <button
-                                            onClick={() => setConfirmDelete(u.id)}
-                                            title="Supprimer ce compte"
-                                            className="px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all"
-                                        >
-                                            <Trash2 size={13} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                                        </td>
+                                        <td className="text-slate-500">
+                                            {u.teamId ? teams.find((t: any) => t.id === u.teamId)?.name : 'Accès global'}
+                                        </td>
+                                        <td>
+                                            <button
+                                                onClick={() => openReset(u)}
+                                                title="Réinitialiser le mot de passe"
+                                                className="flex items-center gap-2 text-slate-400 hover:text-indigo-400 transition-colors group"
+                                            >
+                                                <Lock size={12} />
+                                                <span className="font-mono">{'•'.repeat(Math.min(u.password?.length || 0, 8))}</span>
+                                                <RefreshCw size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            </button>
+                                        </td>
+                                        <td className="text-slate-500">{u.createdAt}</td>
+                                        <td>
+                                            <div className="flex justify-end gap-1">
+                                                <button onClick={() => openEdit(u)} title="Modifier" className="p-1.5 text-slate-400 hover:text-primary transition-colors rounded-lg hover:bg-slate-100/5">
+                                                    <Edit3 size={15} />
+                                                </button>
+                                                <button onClick={() => toggleActive(u)} title={u.active ? 'Désactiver le compte' : 'Activer le compte'} className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors rounded-lg hover:bg-amber-500/5">
+                                                    {u.active ? <UserX size={15} /> : <UserCheck size={15} />}
+                                                </button>
+                                                <button onClick={() => openDelete(u)} title="Supprimer le compte" className="p-1.5 text-slate-400 hover:text-danger transition-colors rounded-lg hover:bg-red-500/5">
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {filtered.length === 0 && (
+                        <div className="p-8 text-center text-slate-500 font-medium">
+                            {search ? `Aucun résultat pour "${search}"` : 'Aucun compte enregistré.'}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Drawer / Form */}
+            {/* ── Create / Edit Form Drawer ── */}
             {showForm && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -285,42 +518,33 @@ export default function AdminUsers() {
                             </button>
                         </div>
 
-                        <div className="space-y-5">
+                        <form onSubmit={(e) => { e.preventDefault(); saveUser(); }} className="space-y-5">
                             {/* Nom complet */}
                             <div>
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Nom complet *</label>
-                                <input
-                                    type="text"
-                                    value={form.name}
-                                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                                    placeholder="ex: Chef Maçons"
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
+                                <input type="text" value={form.name} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))}
+                                    placeholder="ex: Chef Maçons" title="Nom complet"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
                             </div>
 
-                            {/* Username */}
+                            {/* Email / Username */}
                             <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Nom d'utilisateur *</label>
-                                <input
-                                    type="text"
-                                    value={form.username}
-                                    onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                                    placeholder="ex: maçongem"
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Identifiant (Email/Login) *</label>
+                                <input type="text" value={form.email} onChange={e => setForm((f: any) => ({ ...f, email: e.target.value }))}
+                                    placeholder="ex: maçongem" title="Identifiant de connexion"
+                                    autoComplete="username"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
                             </div>
 
                             {/* Password */}
                             <div>
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Mot de passe *</label>
                                 <div className="relative">
-                                    <input
-                                        type={showPass ? 'text' : 'password'}
-                                        value={form.password}
-                                        onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                                        placeholder="Min. 6 caractères"
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-white font-mono font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    />
+                                    <input type={showPass ? 'text' : 'password'} value={form.password}
+                                        onChange={e => setForm((f: any) => ({ ...f, password: e.target.value }))}
+                                        placeholder="Min. 6 caractères" title="Mot de passe"
+                                        autoComplete="new-password"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-white font-mono font-medium placeholder:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
                                     <button type="button" title="Afficher/masquer le mot de passe" onClick={() => setShowPass(s => !s)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200">
                                         {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                                     </button>
@@ -332,10 +556,8 @@ export default function AdminUsers() {
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Rôle *</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     {(Object.entries(ROLE_CONFIG) as [UserRole, typeof ROLE_CONFIG[UserRole]][]).map(([role, cfg]) => (
-                                        <button
-                                            key={role}
-                                            type="button"
-                                            onClick={() => setForm(f => ({ ...f, role, teamId: role !== 'CHEF_EQUIPE' ? undefined : f.teamId }))}
+                                        <button key={role} type="button"
+                                            onClick={() => setForm((f: any) => ({ ...f, role, teamId: role !== 'CHEF_EQUIPE' ? undefined : f.teamId }))}
                                             className={`flex items-center gap-2 p-3 rounded-xl border font-bold text-xs transition-all ${form.role === role ? `${cfg.color} ${cfg.textColor}` : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}
                                         >
                                             <cfg.icon size={14} /> {cfg.label}
@@ -348,14 +570,10 @@ export default function AdminUsers() {
                             {form.role === 'CHEF_EQUIPE' && (
                                 <div>
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Équipe assignée</label>
-                                    <select
-                                        title="Choisir l'équipe"
-                                        value={form.teamId ?? ''}
-                                        onChange={e => setForm(f => ({ ...f, teamId: e.target.value || undefined }))}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                                    >
+                                    <select title="Choisir l'équipe" value={form.teamId ?? ''} onChange={e => setForm((f: any) => ({ ...f, teamId: e.target.value || undefined }))}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
                                         <option value="">— Sélectionner une équipe —</option>
-                                        {TEAMS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                        {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
                                     </select>
                                 </div>
                             )}
@@ -363,10 +581,8 @@ export default function AdminUsers() {
                             {/* 2FA (Admin only) */}
                             {form.role === 'ADMIN_PROQUELEC' && (
                                 <label className="flex items-center gap-3 cursor-pointer">
-                                    <div
-                                        onClick={() => setForm(f => ({ ...f, requires2FA: !f.requires2FA }))}
-                                        className={`w-10 h-6 rounded-full transition-all flex items-center px-0.5 ${form.requires2FA ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                                    >
+                                    <div onClick={() => setForm((f: any) => ({ ...f, requires2FA: !f.requires2FA }))}
+                                        className={`w-10 h-6 rounded-full transition-all flex items-center px-0.5 ${form.requires2FA ? 'bg-indigo-600' : 'bg-slate-700'}`}>
                                         <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${form.requires2FA ? 'translate-x-4' : ''}`} />
                                     </div>
                                     <span className="text-slate-300 font-medium text-sm">Activer la double authentification (2FA)</span>
@@ -375,22 +591,20 @@ export default function AdminUsers() {
 
                             {/* Active toggle */}
                             <label className="flex items-center gap-3 cursor-pointer">
-                                <div
-                                    onClick={() => setForm(f => ({ ...f, active: !f.active }))}
-                                    className={`w-10 h-6 rounded-full transition-all flex items-center px-0.5 ${form.active ? 'bg-emerald-600' : 'bg-slate-700'}`}
-                                >
+                                <div onClick={() => setForm((f: any) => ({ ...f, active: !f.active }))}
+                                    className={`w-10 h-6 rounded-full transition-all flex items-center px-0.5 ${form.active ? 'bg-emerald-600' : 'bg-slate-700'}`}>
                                     <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${form.active ? 'translate-x-4' : ''}`} />
                                 </div>
                                 <span className="text-slate-300 font-medium text-sm">Compte actif</span>
                             </label>
-                        </div>
 
-                        <div className="flex gap-3 mt-8">
-                            <button onClick={() => setShowForm(false)} className="flex-1 py-3.5 bg-slate-800 text-slate-300 rounded-2xl font-bold hover:bg-slate-700 transition-all">Annuler</button>
-                            <button onClick={saveUser} className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25">
-                                <Save size={16} /> {editId ? 'Enregistrer' : 'Créer le compte'}
-                            </button>
-                        </div>
+                            <div className="flex gap-3 mt-8">
+                                <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-3.5 bg-slate-800 text-slate-300 rounded-2xl font-bold hover:bg-slate-700 transition-all">Annuler</button>
+                                <button type="submit" className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 active:scale-95">
+                                    <Save size={16} /> {editId ? 'Enregistrer les modifications' : 'Créer le compte'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

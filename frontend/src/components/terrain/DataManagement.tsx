@@ -26,10 +26,13 @@ export default function DataManagement({ onImport, onClear, totalCount }: DataMa
                 id: (row.id_menage || row.id || `EXT-${Math.random().toString(36).substr(2, 5)}`).toString(),
                 status: row.status || row.etat_avancement || 'En attente',
                 region: row.region || 'N/A',
+                projectId: '',
+                organizationId: 'org_default',
+                version: 1,
                 location: row.lat && row.lon ? {
-                    type: "Point",
-                    coordinates: [parseFloat(row.lon), parseFloat(row.lat)]
-                } : undefined
+                    type: "Point" as const,
+                    coordinates: [parseFloat(row.lon), parseFloat(row.lat)] as [number, number]
+                } : { type: "Point" as const, coordinates: [0, 0] as [number, number] }
             }));
 
             onImport(mappedData);

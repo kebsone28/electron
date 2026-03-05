@@ -12,7 +12,11 @@ import Settings from './pages/Settings';
 import Simulation from './pages/Simulation';
 import Reports from './pages/Reports';
 import Aide from './pages/Aide';
+import Bordereau from './pages/Bordereau';
 import AdminUsers from './pages/AdminUsers';
+import DiagnosticSante from './pages/DiagnosticSante';
+import SecuritySettings from './pages/SecuritySettings';
+import MissionOrder from './pages/MissionOrder';
 import Layout from './layouts/Layout';
 import SessionWarningToast from './components/SessionWarningToast';
 
@@ -112,6 +116,16 @@ function App() {
           }
         />
         <Route
+          path="/bordereau"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={['ADMIN_PROQUELEC', 'DG_PROQUELEC']}>
+                <Bordereau />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/aide"
           element={
             <ProtectedRoute>
@@ -125,6 +139,36 @@ function App() {
             <ProtectedRoute>
               <RoleRoute allowedRoles={['ADMIN_PROQUELEC']}>
                 <AdminUsers />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/security"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={['ADMIN_PROQUELEC']}>
+                <SecuritySettings />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/diagnostic"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={['ADMIN_PROQUELEC']}>
+                <DiagnosticSante />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/mission"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={['ADMIN_PROQUELEC']}>
+                <MissionOrder />
               </RoleRoute>
             </ProtectedRoute>
           }

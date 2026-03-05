@@ -17,7 +17,9 @@ export const config = {
         refreshExpiry: process.env.REFRESH_TOKEN_EXPIRY || '7d'
     },
     cors: {
-        origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*'
+        origin: process.env.CORS_ORIGIN
+            ? process.env.CORS_ORIGIN.split(',')
+            : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173']
     },
     sentry: {
         dsn: process.env.SENTRY_DSN

@@ -14,7 +14,10 @@ import {
     BarChart3,
     ChevronLeft,
     ChevronRight,
-    X
+    X,
+    Calculator,
+    ClipboardList,
+    Target
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -179,7 +182,7 @@ export default function Aide() {
             zap: 'text-amber-400',
             content: [
                 "Bannière ambre automatique si la dernière sync Kobo date de > 24h.",
-                "Visible uniquement pour Admin et DG.",
+                "Notifications Push WebSockets : alertes temps réel lors des synchronisations terrains.",
                 "Bouton 'Sync maintenant' intégré, se ferme avec ✕.",
                 "Revérification automatique toutes les 5 minutes.",
             ]
@@ -192,9 +195,9 @@ export default function Aide() {
             bg: 'bg-rose-500/10 text-rose-500',
             zap: 'text-rose-400',
             content: [
-                "Carte GPS en temps réel avec cercles de grappes colorés par statut.",
+                "Architecture Vector Tiles (MapLibre GL) : rendu fluide de 50 000+ points via GPU.",
                 "Organisation K-Means : regroupement automatique en Grappes et Sous-grappes.",
-                "Filtres de statut et popups d'information par grappe.",
+                "Filtres de statut et popups d'information par grappe avec clustering natif.",
                 "Routage : calcul d'itinéraires pour les livreurs.",
             ]
         },
@@ -252,14 +255,55 @@ export default function Aide() {
         },
         {
             id: 'cahier',
-            title: 'Cahier des Charges',
+            title: 'Cahier des Charges Opérationnel',
             icon: FileText,
             color: 'fuchsia',
             bg: 'bg-fuchsia-500/10 text-fuchsia-500',
             zap: 'text-fuchsia-400',
             content: [
-                "Document dynamique : missions, HSE et matériel par corps de métier.",
-                "Export Word (.docx) avec page de garde personnalisée.",
+                "Synoptiques métier : missions détaillées par phases techniques (Génie civil, Réseau, Intérieur, etc).",
+                "Matériel & HSE : listes exhaustives par corps d'état avec consignes de sécurité Senelec.",
+                "Export Word (.doc) pro : inclut le logo Proquelec, introductions officielles et bloc de signatures.",
+                "Export groupé : générez l'intégralité du dossier technique (tous les métiers) en un seul clic.",
+            ]
+        },
+        {
+            id: 'simulation',
+            title: 'Moteur de Simulation & Optimisation',
+            icon: Calculator,
+            color: 'cyan',
+            bg: 'bg-cyan-500/10 text-cyan-500',
+            zap: 'text-cyan-400',
+            content: [
+                "IA de planification avec prise en compte des aléas (Hivernage, Trésorerie, Logistique, Retards internes).",
+                "Graphiques d'impact temporel animés et calcul du surcoût lié aux risques.",
+                "Ajustements interactifs de scénarios via une interface 'Glassmorphism' premium.",
+            ]
+        },
+        {
+            id: 'mission',
+            title: 'Ordres de Mission (OM)',
+            icon: ClipboardList,
+            color: 'orange',
+            bg: 'bg-orange-500/10 text-orange-500',
+            zap: 'text-orange-400',
+            content: [
+                "Génération automatisée des Ordres de Mission avec calcul structuré des perdiems.",
+                "Prise en charge des Zones (1, 2, 3) selon les barèmes nationaux en vigueur.",
+                "Export PDF officiel (prêt à signer) et stockage sécurisé offline-first.",
+            ]
+        },
+        {
+            id: 'hub',
+            title: 'Le Hub Central & Command Palette',
+            icon: Target,
+            color: 'indigo',
+            bg: 'bg-indigo-500/10 text-indigo-500',
+            zap: 'text-indigo-400',
+            content: [
+                "Navigation ultra-rapide et accès direct via raccourci clavier universel (Ctrl+K ou Cmd+K).",
+                "Tableau de bord organisé par pôles stratégiques (Exploration, Intelligence, Outils Experts).",
+                "Recherche instantanée et exécution d'actions systèmes directes à la volée.",
             ]
         },
     ];

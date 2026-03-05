@@ -19,19 +19,21 @@ const corsOriginResolver = (origin, callback) => {
     const allowed = config.cors.origin;
     console.log(`🔍 CORS Check: Request from [${origin}], Allowed: [${allowed}]`);
 
-    // 2. Ultra-permissive mode
-    if (allowed === '*' || allowed === 'dev_dynamic') {
+    // 2. Ultra-permissive mode or Railway environment
+    const isRailway = origin.endsWith('.up.railway.app');
+    if (allowed === '*' || allowed === 'dev_dynamic' || isRailway) {
+        if (isRailway) console.log(`✅ CORS Auto-Allowed Railway origin: ${origin}`);
         return callback(null, true);
     }
 
     // 3. Explicit check
     if (Array.isArray(allowed)) {
-        if (allowed.includes(origin) || allowed.includes('*')) {
+        if (allowed.includes(origin) || allowed.includes(origin.replace('https://', ''))) {
             return callback(null, true);
         }
     }
 
-    // 4. Default to allow but log if it's not in our list (helpful for debug)
+    // 4. Default to allow but log for debug
     console.warn(`⚠️ CORS Unknown origin: ${origin} - Allowing anyway for debug`);
     callback(null, true);
 };

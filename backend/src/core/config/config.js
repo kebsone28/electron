@@ -18,7 +18,13 @@ export const config = {
     },
     cors: {
         origin: process.env.CORS_ORIGIN
-            ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+            ? process.env.CORS_ORIGIN.split(',').map(o => {
+                const trimmed = o.trim();
+                if (trimmed.includes('.') && !trimmed.startsWith('http')) {
+                    return `https://${trimmed}`;
+                }
+                return trimmed;
+            })
             : '*'
     },
     sentry: {

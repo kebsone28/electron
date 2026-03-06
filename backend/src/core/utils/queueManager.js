@@ -7,13 +7,18 @@ import { config } from '../config/config.js';
  * Centralise les connexions Redis pour BullMQ.
  */
 
-export const redisConnection = new IORedis({
-    host: config.redis.host,
-    port: config.redis.port,
-    password: config.redis.password,
-    tls: config.redis.tls ? {} : undefined,
-    maxRetriesPerRequest: null,
-});
+export const redisConnection = config.redis.url
+    ? new IORedis(config.redis.url, {
+        maxRetriesPerRequest: null,
+        tls: config.redis.tls ? {} : undefined
+    })
+    : new IORedis({
+        host: config.redis.host,
+        port: config.redis.port,
+        password: config.redis.password,
+        tls: config.redis.tls ? {} : undefined,
+        maxRetriesPerRequest: null,
+    });
 
 redisConnection.on('error', (err) => {
     console.error('[REDIS ERROR] Erreur de connexion Redis :', err);

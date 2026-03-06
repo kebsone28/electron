@@ -27,6 +27,7 @@ export const config = {
         dsn: process.env.SENTRY_DSN
     },
     redis: {
+        url: process.env.REDIS_URL, // Utilisé en priorité par IORedis sur Railway
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD || null,

@@ -14,9 +14,7 @@ async function startServer() {
     const server = http.createServer(app);
     socketService.init(server);
 
-    // Phase 2 : Initialisation des Workers de tâche de fond
-    initSimulationWorker();
-
+    // server.listen(config.port, '0.0.0.0', () => { // Force binding to all interfaces
     server.listen(config.port, () => {
       console.log(`🚀 Serveur PROQUELEC démarré en mode ${config.env} sur le port ${config.port}`);
       console.log(`📡 Santé API : http://localhost:${config.port}/health`);

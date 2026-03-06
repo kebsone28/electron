@@ -29,10 +29,11 @@ apiClient.interceptors.response.use(
         const originalRequest = error.config;
 
         // 1. Handle Token Refresh (401)
+        const isAuthRequest = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/register');
         const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
         const isAlreadyAtLogin = window.location.pathname === '/login';
 
-        if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest) {
+        if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest && !isAuthRequest) {
             originalRequest._retry = true;
             try {
                 // Only try refresh if we have a token (or at least we think we do)

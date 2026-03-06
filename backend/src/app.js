@@ -20,7 +20,7 @@ app.get('/api/ping', async (req, res) => {
     } catch (e) {
         dbStatus = `error: ${e.message}`;
     }
-    res.json({ status: 'ok', msg: 'Core API is alive', db: dbStatus });
+    res.json({ status: 'ok', msg: 'Core API is alive', db: dbStatus, version: '1.0.1-DEBUG' });
 });
 
 // 1. Security Middlewares

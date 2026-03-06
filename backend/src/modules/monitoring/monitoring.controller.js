@@ -105,6 +105,10 @@ export const getSystemHealth = async (req, res) => {
         res.json(health);
     } catch (error) {
         console.error('Critical Diagnostic Error:', error);
-        res.status(500).json({ error: 'Failed to generate diagnostic report' });
+        res.status(500).json({
+            error: 'Failed to generate diagnostic report',
+            details: error.message,
+            stack: error.stack
+        });
     }
 };

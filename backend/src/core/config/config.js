@@ -3,13 +3,18 @@ import path from 'path';
 
 dotenv.config();
 
+const parsePort = (val, fallback) => {
+    const port = parseInt(val, 10);
+    return isNaN(port) || port <= 0 || port > 65535 ? fallback : port;
+};
+
 console.log('🔍 Loaded DB_URL from env:', process.env.DATABASE_URL ? 'PRESENT' : 'MISSING');
 console.log('🔍 Loaded REDIS_URL from env:', process.env.REDIS_URL ? 'PRESENT' : 'MISSING (Defaults to localhost)');
 console.log('🔍 Current Working Directory:', process.cwd());
 
 export const config = {
     env: process.env.NODE_ENV || 'development',
-    port: parseInt(process.env.PORT || '5005', 10),
+    port: parsePort(process.env.PORT, 5005),
     dbUrl: process.env.DATABASE_URL,
     jwt: {
         secret: process.env.JWT_SECRET || 'secret',
@@ -30,7 +35,7 @@ export const config = {
     redis: {
         url: process.env.REDIS_URL, // Utilisé en priorité par IORedis sur Railway
         host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        port: parsePort(process.env.REDIS_PORT, 6379),
         password: process.env.REDIS_PASSWORD || null,
         tls: process.env.REDIS_TLS === 'true'
     },

@@ -7,7 +7,7 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [postgis]
+  // extensions = [postgis]
 }
 
 model Organization {
@@ -78,7 +78,7 @@ model Household {
   organizationId String
   status         String
   location       Json
-  location_gis   Unsupported("geometry(Point, 4326)")?
+  // location_gis   Unsupported("geometry(Point, 4326)")?
   owner          Json
   koboData       Json?        @default("{}")
   version        Int          @default(1)

@@ -8,10 +8,10 @@ const router = Router();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 router.get('/mvt/households/:z/:x/:y', async (req, res) => {
-    const { z, x, y } = req.params;
+  const { z, x, y } = req.params;
 
-    try {
-        const mvtQuery = `
+  try {
+    const mvtQuery = `
       WITH mvtgeom AS (
         SELECT 
           id, 
@@ -24,19 +24,32 @@ router.get('/mvt/households/:z/:x/:y', async (req, res) => {
       SELECT ST_AsMVT(mvtgeom.*, 'households', 4096, 'geom') AS mvt FROM mvtgeom;
     `;
 
-        const result = await pool.query(mvtQuery, [z, x, y]);
+    const result = await pool.query(mvtQuery, [z, x, y]);
 
-        // Set headers for Mapbox Vector Tile (MVT) format
-        res.setHeader('Content-Type', 'application/vnd.mapbox-vector-tile');
-        // Enable caching for better performance
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.setHeader('Access-Control-Allow-Origin', '*');
+    // Set headers for Mapbox Vector Tile (MVT) format
+    res.setHeader('Content-Type', 'application/vnd.mapbox-vector-tile');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
 
-        res.send(result.rows[0].mvt);
-    } catch (error) {
-        console.error('MVT Generation Error:', error);
-        res.status(500).json({ error: 'Failed to generate vector tile' });
+    // Manual CORS for MVT (echoing origin for credentials support)
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (result.rows && result.rows.length > 0 && result.rows[0].mvt) {
+      res.send(result.rows[0].mvt);
+    } else {
+      // Send empty MVT tile (Buffer with 0 length is valid for some clients, 
+      // but empty MVT usually has a small header; for simplicity Buffer.alloc(0) works)
+      res.send(Buffer.alloc(0));
     }
+  } catch (error) {
+    console.error('MVT Generation Error:', error);
+    res.status(500).json({
+      error: 'Failed to generate vector tile',
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
 });
 
 export default router;

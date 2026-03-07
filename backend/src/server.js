@@ -13,6 +13,18 @@ async function bootstrap() {
   console.log(`🚀 Bootstrapping PROQUELEC Server on port ${PORT}...`);
 
   const server = http.createServer((req, res) => {
+    // Add basic CORS for bootstrap phase debugging
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      return res.end();
+    }
+
     if (req.url === '/api/ping' || req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ status: 'BOOTING', port: PORT }));
@@ -52,6 +64,9 @@ async function bootstrap() {
       // Fallback handler to show the error in the browser/curl
       server.removeAllListeners('request');
       server.on('request', (req, res) => {
+        const origin = req.headers.origin || '*';
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         res.end(`BOOT_ERROR: ${error.message}\n${error.stack}`);
       });

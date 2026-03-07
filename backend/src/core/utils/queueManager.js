@@ -1,67 +1,94 @@
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from '../config/config.js';
 
 /**
  * Service de Gestion des Queues - PROQUELEC Phase 2
- * Centralise les connexions Redis pour BullMQ.
+ *
+ * En production (REDIS_URL défini), utilise Redis + BullMQ pour les jobs.
+ * En développement local sans Redis, les queues sont désactivées (no-ops).
  */
 
-const redisOptions = {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    retryStrategy: (times) => {
-        const delay = Math.min(times * 100, 15000); // Max 15s avoid flood
-        return delay;
-    }
-};
+// Redis est disponible si une URL est fournie, ou si l'hôte n'est pas localhost
+const isRedisConfigured = !!config.redis.url || (
+    config.redis.host &&
+    config.redis.host !== 'localhost' &&
+    config.redis.host !== '127.0.0.1'
+);
 
-export const redisConnection = config.redis.url
-    ? new IORedis(config.redis.url, {
-        ...redisOptions,
-        tls: config.redis.tls ? {} : undefined
-    })
-    : new IORedis({
-        host: config.redis.host,
-        port: config.redis.port,
-        password: config.redis.password,
-        ...redisOptions,
-        tls: config.redis.tls ? {} : undefined
+let redisConnection = null;
+
+if (isRedisConfigured) {
+    const redisOptions = {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        retryStrategy: (times) => Math.min(times * 100, 15000)
+    };
+
+    redisConnection = config.redis.url
+        ? new IORedis(config.redis.url, {
+            ...redisOptions,
+            tls: config.redis.tls ? {} : undefined
+        })
+        : new IORedis({
+            host: config.redis.host,
+            port: config.redis.port,
+            password: config.redis.password,
+            ...redisOptions,
+            tls: config.redis.tls ? {} : undefined
+        });
+
+    let lastErrorLog = 0;
+    redisConnection.on('error', (err) => {
+        const now = Date.now();
+        if (now - lastErrorLog > 10000) {
+            console.error('[REDIS ERROR] Connexion Redis impossible:', err.message);
+            lastErrorLog = now;
+        }
     });
 
-let lastErrorTime = 0;
-redisConnection.on('error', (err) => {
-    const now = Date.now();
-    // Log only once per 10 seconds to avoid flooding
-    if (now - lastErrorTime > 10000) {
-        console.error('[REDIS ERROR] Erreur de connexion Redis (Throttled) :', err.message);
-        lastErrorTime = now;
-    }
-});
-
-redisConnection.on('connect', () => {
-    console.log(`[REDIS] Connecté à Redis: ${config.redis.host}:${config.redis.port}`);
-});
+    redisConnection.on('connect', () => {
+        console.log(`[REDIS] ✅ Connecté à Redis: ${config.redis.host || 'via URL'}:${config.redis.port}`);
+    });
+} else {
+    console.warn('[REDIS] ⚠️  Redis non configuré en local. Les jobs asynchrones (BullMQ) sont désactivés.');
+    console.warn('[REDIS]    Ajoutez REDIS_URL dans backend/.env pour activer les queues.');
+}
 
 /**
- * Crée une nouvelle file d'attente (Queue)
+ * Crée une file d'attente BullMQ.
+ * Retourne null si Redis n'est pas disponible (graceful degradation).
  */
 export const createQueue = (name) => {
-    return new Queue(name, { connection: redisConnection });
+    if (!isRedisConfigured || !redisConnection) {
+        return null;
+    }
+    try {
+        return new Queue(name, { connection: redisConnection });
+    } catch (e) {
+        console.warn(`[QUEUE] Impossible de créer la file "${name}":`, e.message);
+        return null;
+    }
 };
 
 /**
- * Crée un nouveau Worker
+ * Crée un Worker BullMQ.
+ * Retourne null si Redis n'est pas disponible (graceful degradation).
  */
 export const createWorker = (name, processor, options = {}) => {
-    return new Worker(name, processor, {
-        connection: redisConnection,
-        ...options
-    });
+    if (!isRedisConfigured || !redisConnection) {
+        return null;
+    }
+    try {
+        return new Worker(name, processor, {
+            connection: redisConnection,
+            ...options
+        });
+    } catch (e) {
+        console.warn(`[WORKER] Impossible de créer le worker "${name}":`, e.message);
+        return null;
+    }
 };
 
-export default {
-    redisConnection,
-    createQueue,
-    createWorker
-};
+export { redisConnection };
+export default { redisConnection, createQueue, createWorker };

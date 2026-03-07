@@ -38,7 +38,6 @@ import { MapRoutingPanel } from '../components/terrain/MapRoutingPanel';
 import { GeofencingAlerts } from '../components/terrain/GeofencingAlerts';
 import { PhotoLightbox } from '../components/terrain/PhotoLightbox';
 import { MapDrawZonesPanel, useDrawnZones } from '../components/terrain/MapDrawZones';
-import type { DrawnZone } from '../components/terrain/MapDrawZones';
 import { GeoJsonOverlayPanel } from '../components/terrain/GeoJsonOverlay';
 import type { ExternalLayer } from '../components/terrain/GeoJsonOverlay';
 import { TeamTrackingPanel } from '../components/terrain/TeamTracking';

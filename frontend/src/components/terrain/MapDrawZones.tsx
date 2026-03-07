@@ -62,7 +62,6 @@ export function useDrawnZones() {
 export function MapDrawZonesPanel({
     isDrawing,
     onStartDraw,
-    onStopDraw,
     pendingPoints,
     onConfirmZone,
     onCancelDraw,

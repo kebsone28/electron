@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import toast from 'react-hot-toast';
 import { getHouseholdDerivedStatus } from '../../utils/statusUtils';
 
 // ── Configuration Visuelle ──

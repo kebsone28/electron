@@ -16,7 +16,8 @@ import {
     FileDown,
     Truck,
     PenLine,
-    Globe
+    Globe,
+    Users
 } from 'lucide-react';
 import { useTerrainData } from '../hooks/useTerrainData';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +38,7 @@ import { MapDrawZonesPanel, useDrawnZones } from '../components/terrain/MapDrawZ
 import type { DrawnZone } from '../components/terrain/MapDrawZones';
 import { GeoJsonOverlayPanel } from '../components/terrain/GeoJsonOverlay';
 import type { ExternalLayer } from '../components/terrain/GeoJsonOverlay';
+import { TeamTrackingPanel } from '../components/terrain/TeamTracking';
 
 import {
     StatusBadge,
@@ -105,6 +107,7 @@ const Terrain: React.FC = () => {
     const [showDrawPanel, setShowDrawPanel] = useState(false);
     const [externalLayers, setExternalLayers] = useState<ExternalLayer[]>([]);
     const [showLayersPanel, setShowLayersPanel] = useState(false);
+    const [showTrackingPanel, setShowTrackingPanel] = useState(false);
 
     const handleConfirmZone = (name: string, team: string, color: string) => {
         if (pendingPoints.length < 3) return;
@@ -481,11 +484,18 @@ const Terrain: React.FC = () => {
                                         <PenLine size={14} />
                                     </button>
                                     <button
-                                        onClick={() => { setShowLayersPanel(prev => !prev); setShowDrawPanel(false); }}
+                                        onClick={() => { setShowLayersPanel(prev => !prev); setShowDrawPanel(false); setShowTrackingPanel(false); }}
                                         className={`p-2 rounded-lg border transition-all ${showLayersPanel ? 'bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-100 dark:border-white/5 text-slate-500 hover:text-teal-600'}`}
                                         title="Importer une couche GeoJSON / KML"
                                     >
                                         <Globe size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => { setShowTrackingPanel(prev => !prev); setShowDrawPanel(false); setShowLayersPanel(false); }}
+                                        className={`p-2 rounded-lg border transition-all ${showTrackingPanel ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-100 dark:border-white/5 text-slate-500 hover:text-blue-600'}`}
+                                        title="Suivi des équipes terrain"
+                                    >
+                                        <Users size={14} />
                                     </button>
                                 </div>
                             </div>
@@ -596,6 +606,12 @@ const Terrain: React.FC = () => {
                                         <GeoJsonOverlayPanel
                                             layers={externalLayers}
                                             onLayersChange={setExternalLayers}
+                                            isDarkMode={isDarkMode}
+                                        />
+                                    )}
+                                    {/* Team Tracking Panel */}
+                                    {showTrackingPanel && (
+                                        <TeamTrackingPanel
                                             isDarkMode={isDarkMode}
                                         />
                                     )}

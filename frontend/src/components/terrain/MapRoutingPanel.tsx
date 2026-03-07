@@ -3,9 +3,10 @@
  *
  * Panneau de planification d'itinéraire multi-stops pour les tournées terrain.
  * Calcule la distance totale, estime le coût carburant, et ouvre le trajet dans Google Maps.
+ * Algorithme TSP Nearest-Neighbor intégré pour optimiser l'ordre des arrêts.
  */
 import React, { useState, useCallback } from 'react';
-import { Truck, X, ChevronDown, ChevronUp, Navigation2, Route, MapPin, Trash2, ExternalLink } from 'lucide-react';
+import { Truck, X, ChevronDown, ChevronUp, Navigation2, Route, MapPin, Trash2, ExternalLink, Shuffle, CheckCircle2 } from 'lucide-react';
 import type { Household } from '../../utils/types';
 
 interface MapRoutingPanelProps {
@@ -22,6 +23,25 @@ function getDistanceKm(c1: [number, number], c2: [number, number]): number {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Greedy Nearest-Neighbor TSP: part du premier point, toujours va au plus proche non visité */
+function tspNearestNeighbor(houses: Household[]): Household[] {
+    if (houses.length <= 2) return houses;
+    const remaining = [...houses];
+    const result: Household[] = [remaining.shift()!];
+    while (remaining.length > 0) {
+        const last = result[result.length - 1];
+        const lastCoord = last.location!.coordinates as [number, number];
+        let minDist = Infinity;
+        let minIdx = 0;
+        remaining.forEach((h, i) => {
+            const d = getDistanceKm(lastCoord, h.location!.coordinates as [number, number]);
+            if (d < minDist) { minDist = d; minIdx = i; }
+        });
+        result.push(remaining.splice(minIdx, 1)[0]);
+    }
+    return result;
+}
+
 const FUEL_COST_PER_KM = 150; // FCFA per km
 
 export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
@@ -32,6 +52,7 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isExpanded, setIsExpanded] = useState(true);
     const [searchQ, setSearchQ] = useState('');
+    const [isOptimized, setIsOptimized] = useState(false);
 
     const pendingHouseholds = households.filter(h =>
         h.status !== 'Terminé' && h.status !== 'Réception: Validée'
@@ -45,11 +66,18 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
 
     const toggleHousehold = useCallback((id: string) => {
         setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+        setIsOptimized(false);
     }, []);
 
     const selectedHouseholds = selectedIds
         .map(id => households.find(h => h.id === id))
         .filter(Boolean) as Household[];
+
+    const optimizeRoute = useCallback(() => {
+        const optimized = tspNearestNeighbor(selectedHouseholds);
+        setSelectedIds(optimized.map(h => h.id));
+        setIsOptimized(true);
+    }, [selectedHouseholds]);
 
     const { totalKm, estimatedCost } = React.useMemo(() => {
         if (selectedHouseholds.length < 2) return { totalKm: 0, estimatedCost: 0 };
@@ -91,7 +119,7 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                     <button onClick={() => setIsExpanded(e => !e)} title={isExpanded ? 'Réduire' : 'Agrandir'} className={`p-1 rounded-md transition-colors ${rowHover}`}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
-                    <button onClick={onClose} className={`p-1 rounded-md transition-colors ${rowHover}`}>
+                    <button onClick={onClose} title="Fermer" className={`p-1 rounded-md transition-colors ${rowHover}`}>
                         <X size={14} />
                     </button>
                 </div>
@@ -102,7 +130,7 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                     {/* Route Summary */}
                     {selectedIds.length > 1 && (
                         <div className="px-4 py-3 border-b border-inherit bg-cyan-500/10">
-                            <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
                                 <div className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400 font-bold">
                                     <Route size={12} />
                                     <span>{totalKm.toFixed(1)} km</span>
@@ -110,13 +138,28 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                                 <div className={`font-bold text-xs ${sub}`}>
                                     ≈ {estimatedCost.toLocaleString()} FCFA
                                 </div>
+                                {/* TSP Optimize Button */}
+                                <button
+                                    onClick={optimizeRoute}
+                                    title="Optimiser l'ordre des arrêts (TSP Nearest-Neighbor)"
+                                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-colors ${isOptimized ? 'bg-emerald-500 text-white' : 'bg-indigo-500 hover:bg-indigo-600 text-white'}`}
+                                >
+                                    {isOptimized ? <CheckCircle2 size={9} /> : <Shuffle size={9} />}
+                                    {isOptimized ? 'Optimisé' : 'Optimiser'}
+                                </button>
                                 <button
                                     onClick={openInGoogleMaps}
+                                    title="Ouvrir dans Google Maps"
                                     className="flex items-center gap-1 bg-cyan-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg hover:bg-cyan-600 transition-colors"
                                 >
-                                    Google Maps <ExternalLink size={9} />
+                                    Maps <ExternalLink size={9} />
                                 </button>
                             </div>
+                            {isOptimized && (
+                                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold mt-1.5">
+                                    ✓ Itinéraire optimisé — algorithme Nearest-Neighbor
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -157,6 +200,7 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                                     <button
                                         key={h.id}
                                         onClick={() => toggleHousehold(h.id)}
+                                        title={h.id}
                                         className={`flex items-center gap-2 w-full text-left px-2 py-2 rounded-lg text-xs transition-colors ${isSelected ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400' : rowHover}`}
                                     >
                                         <MapPin size={10} className={isSelected ? 'text-cyan-500' : sub} />
@@ -177,6 +221,7 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                         <div className="px-4 pb-3">
                             <button
                                 onClick={openInGoogleMaps}
+                                title="Lancer la tournée dans Google Maps"
                                 className="w-full flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-xs py-2.5 rounded-xl transition-colors"
                             >
                                 <Navigation2 size={12} /> Lancer la tournée

@@ -23,36 +23,22 @@ app.get('/api/ping', async (req, res) => {
     res.json({ status: 'ok', msg: 'Core API is alive', db: dbStatus, version: '1.0.1-DEBUG' });
 });
 
-// 1. Security Middlewares
-app.use(helmet());
-// Dynamic CORS origin resolver
-const corsOriginResolver = (origin, callback) => {
-    // 1. Allow non-browser requests
-    if (!origin) return callback(null, true);
-
-    const allowed = config.cors.origin;
-    console.log(`🔍 CORS Check: Request from [${origin}], Allowed: [${allowed}]`);
-
-    // 2. Ultra-permissive mode
-    if (allowed === '*' || allowed === 'dev_dynamic') {
-        return callback(null, true);
-    }
-
-    // 3. Explicit check
-    if (Array.isArray(allowed)) {
-        if (allowed.includes(origin) || allowed.includes('*')) {
-            return callback(null, true);
-        }
-    }
-
-    // 4. Default to allow but log if it's not in our list (helpful for debug)
-    console.warn(`⚠️ CORS Unknown origin: ${origin} - Allowing anyway for debug`);
-    callback(null, true);
-};
-
+// 1. Basic Middlewares & CORS (MUST be before helmet and other security layers)
 app.use(cors({
-    origin: corsOriginResolver,
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow all origins for debug/production flexibility
+        // With credentials: true, we MUST echo the origin instead of using '*'
+        callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
+
+// 2. Security Middlewares
+app.use(helmet({
+    crossOriginResourcePolicy: false, // Important for cross-origin images/resources
+    contentSecurityPolicy: false      // Temporarily disabled for easier PWA/Map tracking
 }));
 
 // 2. Request Parsing

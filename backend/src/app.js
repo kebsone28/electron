@@ -11,26 +11,29 @@ import { config } from './core/config/config.js';
 
 const app = express();
 
-// 1. CORS Configuration (MUST be the absolute first middleware)
-app.use(cors({
-    origin: (origin, callback) => {
-        // Echo the origin back to satisfy Access-Control-Allow-Credentials: true
-        callback(null, true);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'Pragma']
-}));
+// 1. Manual CORS & Preflight (Bulletproof for production)
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
 
-// Explicitly handle pre-flight OPTIONS requests for all routes
-app.options('*', cors());
+    // Echo back the origin if it exists, or use '*' if no credentials
+    // But since we use credentials: true, we MUST provide a specific origin
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else if (process.env.NODE_ENV !== 'production') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
 
-// 2. Security Middlewares (Set after CORS)
-app.use(helmet({
-    crossOriginResourcePolicy: false,
-    contentSecurityPolicy: false,
-    crossOriginOpenerPolicy: false // Sometimes blocks PWA/Auth popups
-}));
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+    res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24h
+
+    // Handle pre-flight
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    next();
+});
 
 app.get('/api/ping', async (req, res) => {
     let dbStatus = 'waiting';
@@ -41,7 +44,7 @@ app.get('/api/ping', async (req, res) => {
     } catch (e) {
         dbStatus = `error: ${e.message}`;
     }
-    res.json({ status: 'ok', msg: 'Core API is alive', db: dbStatus, version: '1.0.2-CORS-FIX' });
+    res.json({ status: 'ok', msg: 'Core API is alive', db: dbStatus, version: '1.0.3-MANUAL-CORS' });
 });
 
 // 2. Request Parsing

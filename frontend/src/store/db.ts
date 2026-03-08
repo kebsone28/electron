@@ -54,6 +54,12 @@ export class ProquelecDatabase extends Dexie {
     sync_logs!: Table<SyncLog>;
     app_security!: Table<AppSecurity>;
     syncOutbox!: Table<SyncQueueItem>;
+    favorites!: Table<{
+        id?: number;
+        projectId: string;
+        householdId: string;
+        createdAt: string;
+    }>;
 
     constructor() {
         super('ProquelecDB');
@@ -121,6 +127,23 @@ export class ProquelecDatabase extends Dexie {
             sync_logs: '++id, timestamp, action',
             app_security: 'key, updatedAt',
             syncOutbox: '++id, status, timestamp'
+        });
+
+        // Version 8 — Favoris et Bookmarks
+        this.version(8).stores({
+            missions: 'id, projectId, orderNumber, startDate, endDate',
+            inventory: 'id, projectId, category, name',
+            expenses: 'id, projectId, category, date',
+            organizations: 'id, name',
+            users: 'id, organizationId, email, role',
+            projects: 'id, organizationId, name, status, version',
+            zones: 'id, projectId, organizationId, name, version',
+            households: 'id, projectId, zoneId, organizationId, status, version',
+            teams: 'id, organizationId, name, type, specialty',
+            sync_logs: '++id, timestamp, action',
+            app_security: 'key, updatedAt',
+            syncOutbox: '++id, status, timestamp',
+            favorites: '++id, projectId, householdId, createdAt'
         });
     }
 }

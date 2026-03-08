@@ -117,8 +117,8 @@ export function useTerrainData() {
 
         // Trigger an API call to update the backend PostGIS layer
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5005';
-            const token = localStorage.getItem('token');
+            const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5005').replace(/\/api$/, '');
+            const token = localStorage.getItem('access_token');
             await fetch(`${apiUrl}/api/households/${id}`, {
                 method: 'PATCH',
                 headers: {

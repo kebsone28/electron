@@ -193,7 +193,7 @@ export default function Reports() {
                                 className="w-full bg-white dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:text-white"
                             />
                         </div>
-                        <button className="p-2.5 bg-white dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl text-gray-400 hover:text-blue-600 transition-all shadow-sm">
+                        <button title="Filtrer" className="p-2.5 bg-white dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl text-gray-400 hover:text-blue-600 transition-all shadow-sm">
                             <Filter size={18} />
                         </button>
                     </div>

@@ -1,20 +1,21 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import apiClient from '../api/client';
 import { db, syncData } from '../store/db';
 
 export function useSync() {
     const [isSyncing, setIsSyncing] = useState(false);
-    const [lastSync, setLastSync] = useState<string | null>(localStorage.getItem('last_sync_timestamp'));
+    const isSyncingRef = useRef(false);
+    const lastSyncRef = useRef(localStorage.getItem('last_sync_timestamp'));
+    const [lastSync, setLastSyncState] = useState<string | null>(lastSyncRef.current);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'success'>('idle');
 
     const sync = useCallback(async (isAuto = false) => {
-        if (isSyncing) return;
+        if (isSyncingRef.current) return;
 
         const token = localStorage.getItem('access_token');
-        if (!token) {
-            return; // Prevent 401 errors when no user is authenticated
-        }
+        if (!token) return;
 
+        isSyncingRef.current = true;
         setIsSyncing(true);
         setSyncStatus('syncing');
 
@@ -28,7 +29,7 @@ export function useSync() {
             const expenses = await (db as any).expenses?.toArray() || [];
 
             await apiClient.post('/sync/push', {
-                timestamp: lastSync,
+                timestamp: lastSyncRef.current,
                 changes: {
                     projects,
                     households,
@@ -42,7 +43,7 @@ export function useSync() {
 
             // 2. PULL server changes
             const response = await apiClient.get('/sync/pull', {
-                params: { since: lastSync }
+                params: { since: lastSyncRef.current }
             });
 
             const { timestamp, changes } = response.data;
@@ -56,7 +57,8 @@ export function useSync() {
             if (changes.expenses) await syncData('expenses', changes.expenses);
             if (changes.missions) await syncData('missions', changes.missions);
 
-            setLastSync(timestamp);
+            lastSyncRef.current = timestamp;
+            setLastSyncState(timestamp);
             setSyncStatus('success');
             localStorage.setItem('last_sync_timestamp', timestamp);
 
@@ -76,9 +78,10 @@ export function useSync() {
             setSyncStatus('error');
             if (!isAuto) throw error;
         } finally {
+            isSyncingRef.current = false;
             setIsSyncing(false);
         }
-    }, [isSyncing, lastSync]);
+    }, []); // Stable identity
 
     // Live Sync: Background sync every 5 minutes if browser is active
     useEffect(() => {

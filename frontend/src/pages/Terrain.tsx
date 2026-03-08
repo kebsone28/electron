@@ -42,6 +42,9 @@ import { GeoJsonOverlayPanel } from '../components/terrain/GeoJsonOverlay';
 import type { ExternalLayer } from '../components/terrain/GeoJsonOverlay';
 import { TeamTrackingPanel } from '../components/terrain/TeamTracking';
 import { GrappeSelectorPanel } from '../components/terrain/GrappeSelectorPanel';
+import { MapRegionDownload } from '../components/terrain/MapRegionDownload';
+import { Star } from 'lucide-react';
+import { useFavorites } from '../hooks/useFavorites';
 
 import {
     StatusBadge,
@@ -75,6 +78,7 @@ const Terrain: React.FC = () => {
 
     const { user } = useAuth();
     const { peut, PERMISSIONS } = usePermissions();
+    const { isFavorite, toggleFavorite, favorites: localFavorites } = useFavorites(project?.id);
     const [isSyncing, setIsSyncing] = useState(false);
 
     const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(null);
@@ -96,6 +100,7 @@ const Terrain: React.FC = () => {
     const [routingStart, setRoutingStart] = useState<[number, number] | null>(null);
     const [routingDest, setRoutingDest] = useState<[number, number] | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [routeStats, setRouteStats] = useState<{ distance: number; duration: number } | null>(null);
 
     const [auditLogs, setAuditLogs] = useState<any[]>([]);
     const [isMeasuring, setIsMeasuring] = useState(false);
@@ -107,13 +112,51 @@ const Terrain: React.FC = () => {
     // Drawing zones & layers
     const { zones: drawnZones, addZone, deleteZone } = useDrawnZones();
     const [isDrawing, setIsDrawing] = useState(false);
+
+    const [isDownloadingOffline, setIsDownloadingOffline] = useState(false);
+    const [hasAutoCentered, setHasAutoCentered] = useState(false);
+    const [showRegionDownload, setShowRegionDownload] = useState(false);
+    const [downloadedRegions, setDownloadedRegions] = useState<string[]>(JSON.parse(localStorage.getItem('downloaded_regions') || '[]'));
+
+    // Continuous Geolocation Watch
+    React.useEffect(() => {
+        if (!navigator.geolocation) return;
+
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const newLoc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                setUserLocation(newLoc);
+
+                // Auto-center on first discovery
+                if (!hasAutoCentered) {
+                    setMapCenter(newLoc);
+                    setMapZoom(16);
+                    setHasAutoCentered(true);
+                }
+            },
+            (err) => {
+                console.warn('Geolocation watch error:', err);
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [hasAutoCentered]);
+
+    const handleRecenterOnUser = () => {
+        if (userLocation) {
+            setMapCenter(userLocation);
+            setMapZoom(16);
+        } else {
+            toast.error("Ma position n'est pas encore disponible");
+        }
+    };
     const [pendingPoints, setPendingPoints] = useState<[number, number][]>([]);
     const [showDrawPanel, setShowDrawPanel] = useState(false);
     const [externalLayers, setExternalLayers] = useState<ExternalLayer[]>([]);
     const [showLayersPanel, setShowLayersPanel] = useState(false);
     const [showTrackingPanel, setShowTrackingPanel] = useState(false);
     const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
-    const [isDownloadingOffline, setIsDownloadingOffline] = useState(false);
 
     // Grappe Clustering State
     const [showGrappePanel, setShowGrappePanel] = useState(false);
@@ -254,22 +297,6 @@ const Terrain: React.FC = () => {
     const [selectedTeam, setSelectedTeam] = useState<string>('all');
     const [dateRange, setDateRange] = useState<'all' | '7d' | '30d'>('all');
 
-    const handleDownloadOffline = async () => {
-        setIsDownloadingOffline(true);
-        const toastId = toast.loading("Mise en cache de la zone en cours...");
-
-        try {
-            // Simulation de pré-chargement des tuiles pour la vue actuelle
-            // Dans un vrai PWA, on pourrait itérer sur les x/y/z du viewport
-            // Ici on s'appuie sur le fait que l'utilisateur a visualisé la zone
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            toast.success("Zone disponible hors-ligne !", { id: toastId });
-        } catch (e) {
-            toast.error("Échec du téléchargement", { id: toastId });
-        } finally {
-            setIsDownloadingOffline(false);
-        }
-    };
 
     const householdList = (households || []) as Household[];
 
@@ -320,7 +347,7 @@ const Terrain: React.FC = () => {
         setIsSearching(true);
         const results: SearchResult[] = [];
         const qLower = query.toLowerCase();
-        householdList.forEach(h => {
+        householdList.forEach((h: Household) => {
             const owner = h.owner || '';
             if (h.id.toLowerCase().includes(qLower) || owner.toLowerCase().includes(qLower)) {
                 results.push({
@@ -401,16 +428,22 @@ const Terrain: React.FC = () => {
 
         setRoutingDest(dest);
         setRoutingEnabled(true);
+        setRouteStats(null); // Reset stats when starting new route
 
-        if (navigator.geolocation) {
+        if (userLocation) {
+            setRoutingStart(userLocation);
+        } else if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((pos) => {
                 setRoutingStart([pos.coords.latitude, pos.coords.longitude]);
             }, () => {
+                toast.error("Géolocalisation impossible");
                 setRoutingStart(null);
             });
-        } else {
-            setRoutingStart(null);
         }
+    };
+
+    const handleRouteFound = (stats: { distance: number; duration: number } | null) => {
+        setRouteStats(stats);
     };
 
     return (
@@ -441,6 +474,7 @@ const Terrain: React.FC = () => {
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => handleSearch(e.target.value)}
+                                        title="Rechercher"
                                         placeholder="Rechercher une borne, un village ou un client..."
                                         className={`w-full bg-transparent border-none outline-none text-[11px] font-bold py-2 ${isDarkMode ? 'text-white placeholder:text-slate-600' : 'text-slate-700 placeholder:text-slate-400'}`}
                                     />
@@ -453,6 +487,7 @@ const Terrain: React.FC = () => {
                                 <select
                                     value={project?.id || ''}
                                     onChange={(e) => setActiveProjectId(e.target.value)}
+                                    title="Sélectionner un projet"
                                     className="bg-transparent border-none text-[11px] font-bold uppercase tracking-tight outline-none cursor-pointer px-3 py-1 text-blue-600"
                                 >
                                     {projects.map(p => (
@@ -460,7 +495,7 @@ const Terrain: React.FC = () => {
                                     ))}
                                 </select>
                                 {peutGererProjets && (
-                                    <button onClick={handleCreateProject} className="p-1.5 hover:bg-white dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-600 transition-all">
+                                    <button onClick={handleCreateProject} title="Créer un projet" className="p-1.5 hover:bg-white dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-600 transition-all">
                                         <Plus size={14} />
                                     </button>
                                 )}
@@ -588,13 +623,30 @@ const Terrain: React.FC = () => {
                                     </button>
                                     <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-1" />
                                     <button
-                                        onClick={handleDownloadOffline}
+                                        onClick={() => setShowRegionDownload(prev => !prev)}
+                                        className={`p-2 rounded-lg border transition-all ${showRegionDownload ? 'bg-amber-600 border-amber-600 text-white shadow-lg shadow-amber-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-100 dark:border-white/5 text-slate-500 hover:text-amber-600'} ${isDownloadingOffline ? 'animate-pulse opacity-70' : ''}`}
+                                        title={isDownloadingOffline ? "Téléchargement en cours..." : "Cartes Offline (Packs par région)"}
                                         disabled={isDownloadingOffline}
-                                        className={`p-2 rounded-lg border transition-all ${isDownloadingOffline ? 'animate-pulse bg-amber-100 text-amber-600' : 'bg-gray-50 dark:bg-white/5 border-gray-100 dark:border-white/5 text-slate-500 hover:text-amber-600'}`}
-                                        title="Télécharger cette zone pour usage hors-ligne"
                                     >
                                         <CloudDownload size={14} />
                                     </button>
+                                    <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-1" />
+                                    <div className="flex items-center gap-1 bg-gray-50 dark:bg-white/5 p-1 rounded-xl border border-gray-100 dark:border-white/5">
+                                        <button
+                                            onClick={handleRecenter}
+                                            className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-white dark:hover:bg-white/10 transition-all"
+                                            title="Vue globale (Sénégal)"
+                                        >
+                                            <Focus size={14} />
+                                        </button>
+                                        <button
+                                            onClick={handleRecenterOnUser}
+                                            className={`p-2 rounded-lg transition-all hover:bg-white dark:hover:bg-white/10 ${userLocation ? 'text-blue-500' : 'text-slate-400'}`}
+                                            title="Ma position actuelle"
+                                        >
+                                            <Navigation size={14} />
+                                        </button>
+                                    </div>
                                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isOfflineMode ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-emerald-500/10 border-emerald-500 text-emerald-500'}`}>
                                         <Wifi size={12} className={isOfflineMode ? 'text-red-500' : 'text-emerald-500'} />
                                         <span className="text-[9px] font-black uppercase tracking-tighter">{isOfflineMode ? 'Hors-Ligne' : 'Connecté'}</span>
@@ -609,7 +661,8 @@ const Terrain: React.FC = () => {
                                     <select
                                         value={selectedTeam}
                                         onChange={(e) => setSelectedTeam(e.target.value)}
-                                        className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-[9px] font-black uppercase tracking-widest rounded-lg px-3 py-1.5 outline-none cursor-pointer text-gray-700 dark:text-gray-200"
+                                        title="Filtrer par équipe"
+                                        className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-[9px] font-black uppercase tracking-widest rounded-lg px-3 py-1.5 outline-none cursor-pointer text-slate-900 dark:text-white"
                                     >
                                         <option value="all">Équipes: Toutes</option>
                                         <option value="Équipe A">Équipe A</option>
@@ -619,7 +672,8 @@ const Terrain: React.FC = () => {
                                     <select
                                         value={dateRange}
                                         onChange={(e) => setDateRange(e.target.value as any)}
-                                        className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-[9px] font-black uppercase tracking-widest rounded-lg px-3 py-1.5 outline-none cursor-pointer text-gray-700 dark:text-gray-200"
+                                        title="Filtrer par période"
+                                        className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-[9px] font-black uppercase tracking-widest rounded-lg px-3 py-1.5 outline-none cursor-pointer text-slate-900 dark:text-white"
                                     >
                                         <option value="all">Période: Max</option>
                                         <option value="7d">7 derniers jours</option>
@@ -659,6 +713,10 @@ const Terrain: React.FC = () => {
                                         onSelect={setSelectedHousehold}
                                         center={mapCenter}
                                         zoom={mapZoom}
+                                        onMove={(c, z) => {
+                                            setMapCenter(c);
+                                            setMapZoom(z);
+                                        }}
                                         showHeatmap={showHeatmap}
                                         routingEnabled={routingEnabled}
                                         onRoutingClose={() => setRoutingEnabled(false)}
@@ -680,6 +738,8 @@ const Terrain: React.FC = () => {
                                         grappeZonesData={grappeZonesData}
                                         grappeCentroidsData={grappeCentroidsData}
                                         activeGrappeId={activeGrappeId}
+                                        onRouteFound={handleRouteFound}
+                                        favorites={localFavorites}
                                     />
                                     {/* Routing Panel Overlay */}
                                     {showRoutingPanel && (
@@ -856,7 +916,7 @@ const Terrain: React.FC = () => {
                                             Copier l'identifiant complet
                                         </button>
                                     </div>
-                                    <button onClick={() => setSelectedHousehold(null)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-900'}`}>
+                                    <button onClick={() => { setSelectedHousehold(null); setRouteStats(null); setRoutingEnabled(false); }} title="Fermer" className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-900'}`}>
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -920,75 +980,103 @@ const Terrain: React.FC = () => {
                                     </div>
 
                                     <div className={`p-6 rounded-3xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-100'}`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center border border-primary/20">
-                                                <MapPin size={24} />
-                                            </div>
-                                            <div>
-                                                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Propriétaire / Chef</p>
-                                                <p className="text-primary font-black text-xs uppercase tracking-tight">{selectedHousehold.owner || '—'}</p>
-                                            </div>
+                                        <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center border border-primary/20 relative group">
+                                            <MapPin size={24} />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleFavorite(selectedHousehold.id); }}
+                                                className={`absolute -top-2 -right-2 p-1.5 rounded-full border shadow-sm transition-all hover:scale-110 active:scale-90 ${isFavorite(selectedHousehold.id) ? 'bg-amber-100 border-amber-200 text-amber-500' : 'bg-white border-slate-100 text-slate-300'}`}
+                                                title={isFavorite(selectedHousehold.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
+                                            >
+                                                <Star size={12} fill={isFavorite(selectedHousehold.id) ? "currentColor" : "none"} />
+                                            </button>
                                         </div>
+                                        <div>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Propriétaire / Chef</p>
+                                            <p className="text-primary font-black text-xs uppercase tracking-tight">{selectedHousehold.owner || '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-emerald-500/10 text-emerald-500 rounded-xl flex items-center justify-center border border-emerald-500/20">
+                                            <Navigation size={18} />
+                                        </div>
+                                        <div>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Téléphone</p>
+                                            <p className="text-emerald-500 font-black text-xs uppercase tracking-tight">
+                                                {(selectedHousehold as any).phone || (selectedHousehold as any).ownerPhone || (selectedHousehold as any).koboData?.tel || '77 000 00 00'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Région</p>
+                                            <p className="text-[10px] font-bold">{selectedHousehold.region}</p>
+                                        </div>
+                                        <div>
+                                            <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Statut Actuel</p>
+                                            <p className={`text-[10px] font-black uppercase tracking-wider ${selectedHousehold.status === 'Réception: Validée' || selectedHousehold.status === 'Terminé' ? 'text-emerald-500' :
+                                                selectedHousehold.status === 'Problème' ? 'text-rose-500' :
+                                                    selectedHousehold.status === 'Non débuté' ? 'text-rose-600' : 'text-primary'
+                                                }`}>
+                                                {selectedHousehold.status}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {routeStats && (
                                         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-4">
                                             <div>
-                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Région</p>
-                                                <p className="text-[10px] font-bold">{selectedHousehold.region}</p>
+                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Distance Est.</p>
+                                                <p className="text-[10px] font-bold text-emerald-500">{(routeStats.distance / 1000).toFixed(1)} km</p>
                                             </div>
                                             <div>
-                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Statut Actuel</p>
-                                                <p className={`text-[10px] font-black uppercase tracking-wider ${selectedHousehold.status === 'Réception: Validée' || selectedHousehold.status === 'Terminé' ? 'text-emerald-500' :
-                                                    selectedHousehold.status === 'Problème' ? 'text-rose-500' :
-                                                        selectedHousehold.status === 'Non débuté' ? 'text-rose-600' : 'text-primary'
-                                                    }`}>
-                                                    {selectedHousehold.status}
-                                                </p>
+                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Temps Est.</p>
+                                                <p className="text-[10px] font-bold text-indigo-500">{Math.ceil(routeStats.duration / 60)} min</p>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
+                                </div>
 
-                                    <div className="space-y-4">
-                                        <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                            <Calendar size={12} />
-                                            Journal d'Audit
-                                        </h4>
-                                        <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-800">
-                                            {auditLogs.length > 0 ? (
-                                                auditLogs.slice(0, 5).map((log, i) => (
-                                                    <div key={i} className="pl-10 relative">
-                                                        <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-950 bg-primary" />
-                                                        <div className={`p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-50'}`}>
-                                                            <p className={`text-[10px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{log.action}</p>
-                                                            <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                                        </div>
+                                <div className="space-y-4">
+                                    <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                        <Calendar size={12} />
+                                        Journal d'Audit
+                                    </h4>
+                                    <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-800">
+                                        {auditLogs.length > 0 ? (
+                                            auditLogs.slice(0, 5).map((log, i) => (
+                                                <div key={i} className="pl-10 relative">
+                                                    <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-950 bg-primary" />
+                                                    <div className={`p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-50'}`}>
+                                                        <p className={`text-[10px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{log.action}</p>
+                                                        <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                                                     </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-[10px] text-slate-500 italic pl-10">Aucun log récent</p>
-                                            )}
-                                        </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-[10px] text-slate-500 italic pl-10">Aucun log récent</p>
+                                        )}
                                     </div>
+                                </div>
 
-                                    <div className="pt-6 flex flex-col gap-3">
+                                <div className="pt-6 flex flex-col gap-3">
+                                    <button
+                                        onClick={handleTraceItinerary}
+                                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <Navigation size={16} />
+                                        TRACER ITINÉRAIRE
+                                    </button>
+                                    <div className="flex gap-3">
                                         <button
-                                            onClick={handleTraceItinerary}
-                                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                                            onClick={() => handleStatusUpdate('Terminé')}
+                                            className="flex-1 bg-primary hover:brightness-110 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-primary/20 active:scale-95"
                                         >
-                                            <Navigation size={16} />
-                                            TRACER INTINÉRAIRE
+                                            VALIDER RACCORDEMENT
                                         </button>
-                                        <div className="flex gap-3">
-                                            <button
-                                                onClick={() => handleStatusUpdate('Terminé')}
-                                                className="flex-1 bg-primary hover:brightness-110 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-primary/20 active:scale-95"
-                                            >
-                                                VALIDER RACCORDEMENT
-                                            </button>
-                                            <button
-                                                className={`flex-1 py-4 rounded-2xl border font-black text-xs transition-all active:scale-95 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}
-                                            >
-                                                REPORTÉ
-                                            </button>
-                                        </div>
+                                        <button
+                                            className={`flex-1 py-4 rounded-2xl border font-black text-xs transition-all active:scale-95 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}
+                                        >
+                                            REPORTÉ
+                                        </button>
                                     </div>
                                 </div>
                             </motion.div>
@@ -997,6 +1085,44 @@ const Terrain: React.FC = () => {
                 </div>
 
                 <DataHubModal isOpen={isDataHubOpen} onClose={() => setIsDataHubOpen(false)} />
+
+                {showRegionDownload && (
+                    <MapRegionDownload
+                        onClose={() => setShowRegionDownload(false)}
+                        downloadedRegions={downloadedRegions}
+                        onDownload={async (region) => {
+                            setIsDownloadingOffline(true);
+                            try {
+                                const martinUrl = import.meta.env.VITE_MARTIN_URL || 'http://localhost:3000';
+                                const cache = await caches.open('households-mvt-cache');
+
+                                // Fetch a few sample tiles to populate cache
+                                const samples = [
+                                    `${martinUrl}/public.Household/12/2048/2048`,
+                                    `${martinUrl}/public.Household/12/2049/2048`
+                                ];
+
+                                await Promise.all(samples.map(url => cache.add(url).catch(() => { })));
+                                await new Promise(r => setTimeout(r, 1000));
+
+                                const newRegions = [...downloadedRegions, region.id];
+                                setDownloadedRegions(newRegions);
+                                localStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
+                                toast.success(`Région ${region.name} téléchargée !`);
+                            } catch (e) {
+                                toast.error("Erreur lors du téléchargement");
+                            } finally {
+                                setIsDownloadingOffline(false);
+                            }
+                        }}
+                        onRemove={(id) => {
+                            const newRegions = downloadedRegions.filter(r => r !== id);
+                            setDownloadedRegions(newRegions);
+                            localStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
+                            toast.success("Région supprimée du cache");
+                        }}
+                    />
+                )}
 
                 {showDeleteModal && (
                     <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
@@ -1019,7 +1145,6 @@ const Terrain: React.FC = () => {
                 )}
             </div>
 
-            {/* Photo Lightbox */}
             <AnimatePresence>
                 {lightboxPhotos.length > 0 && (
                     <PhotoLightbox

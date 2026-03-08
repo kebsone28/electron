@@ -82,7 +82,7 @@ export default function Sidebar() {
             <div className="space-y-4">
                 <div className={`p-4 rounded-3xl flex flex-col gap-3 border transition-all glass-premium ${isDarkMode ? 'border-primary/20 shadow-primary/10' : 'border-primary/20 shadow-primary/10'}`}>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-electric-sm" style={{ background: 'var(--gradient-electric)' }}>
+                        <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-electric-sm bg-electric-gradient">
                             {user.name?.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">

@@ -146,7 +146,7 @@ export const UnifiedStatusWidget: React.FC<UnifiedStatusWidgetProps> = ({
             dragMomentum={false}
             className={`absolute bottom-32 left-4 md:left-8 z-[1000] w-[calc(100%-2rem)] md:w-72 rounded-2xl border shadow-2xl overflow-hidden transition-colors map-widget-glass ${isDarkMode ? 'border-primary/20' : 'border-slate-200'}`}
         >
-            <div className="p-4 flex items-center justify-between cursor-grab active:cursor-grabbing" style={{ background: 'var(--gradient-electric)' }}>
+            <div className="p-4 flex items-center justify-between cursor-grab active:cursor-grabbing bg-electric-gradient">
                 <div className="flex items-center gap-2">
                     <Activity size={16} className="text-white" />
                     <span className="text-xs font-black text-white italic uppercase tracking-widest">Suivi Opérationnel</span>

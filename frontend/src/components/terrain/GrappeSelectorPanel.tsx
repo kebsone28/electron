@@ -110,7 +110,7 @@ export function GrappeSelectorPanel({ isDarkMode = true, onClose, clusters, acti
                         >
                             <div
                                 className="cluster-color-swatch w-4 h-8 rounded-md flex-shrink-0"
-                                style={{ '--swatch-color': color } as React.CSSProperties}
+                                style={{ backgroundColor: color }}
                             />
                             <div className="flex-1 min-w-0">
                                 <p className={`text-sm font-bold truncate ${isActive ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : text}`}>

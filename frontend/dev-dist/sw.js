@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-c5fd805d'], (function (workbox) { 'use strict';
+define(['./workbox-346eee80'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -79,7 +79,7 @@ define(['./workbox-c5fd805d'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "index.html",
-    "revision": "0.2k96p230nd8"
+    "revision": "0.ld0grfmjpv"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -96,6 +96,22 @@ define(['./workbox-c5fd805d'], (function (workbox) { 'use strict';
     "cacheName": "api-cache",
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 100,
+      maxAgeSeconds: 86400
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/tiles\.openfreemap\.org\/.*/i, new workbox.CacheFirst({
+    "cacheName": "map-tiles-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 500,
+      maxAgeSeconds: 604800
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
+  workbox.registerRoute(/\/api\/geo\/mvt\/.*/i, new workbox.NetworkFirst({
+    "cacheName": "households-mvt-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 200,
       maxAgeSeconds: 86400
     })]
   }), 'GET');

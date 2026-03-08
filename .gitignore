@@ -42,6 +42,15 @@ tmp/
 *.jpg
 *.jpeg
 KOBO/
+backend/osrm_data/
+*.osrm*
+*.mvt
+
+# Temporary scripts
+backend/check_db.js
+backend/check_db_raw.js
+backend/check_org.js
+backend/test_mvt_fix.js
 
 # Archiving legacy
 archive/

@@ -86,6 +86,18 @@ services:
       - "-c"
       - "default_statistics_target=100"
 
+  # ============ OSRM ROUTING ENGINE ============
+  osrm:
+    image: osrm/osrm-backend
+    volumes:
+      - ./backend/osrm_data:/data
+    ports:
+      - "5000:5000"
+    command: osrm-routed --algorithm mld --max-table-size 100000 /data/senegal-latest.osrm
+    restart: unless-stopped
+    networks:
+      - proquelec
+
 volumes:
   postgres_data:
     driver: local

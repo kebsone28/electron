@@ -16,10 +16,10 @@ router.get('/mvt/households/:z/:x/:y', async (req, res) => {
         SELECT 
           id, 
           status,
-          ST_AsMVTGeom(location_gis, ST_TileEnvelope($1::int, $2::int, $3::int)) AS geom
+          ST_AsMVTGeom(ST_Transform(location_gis, 3857), ST_TileEnvelope($1::int, $2::int, $3::int)) AS geom
         FROM "Household"
         WHERE location_gis IS NOT NULL
-        AND ST_Intersects(location_gis, ST_TileEnvelope($1::int, $2::int, $3::int))
+        AND ST_Intersects(location_gis, ST_Transform(ST_TileEnvelope($1::int, $2::int, $3::int), 4326))
       )
       SELECT ST_AsMVT(mvtgeom.*, 'households', 4096, 'geom') AS mvt FROM mvtgeom;
     `;

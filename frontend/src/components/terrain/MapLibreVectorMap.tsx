@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import toast from 'react-hot-toast';
+import { RefreshCw } from 'lucide-react';
 import { getHouseholdDerivedStatus } from '../../utils/statusUtils';
 
 // ── Configuration Visuelle ──
@@ -108,11 +109,18 @@ export default function MapLibreVectorMap({
     grappeCentroidsData,
     activeGrappeId,
     userLocation,
-    onHouseholdDrop
+    onHouseholdDrop,
+    routingEnabled,
+    routingStart,
+    routingDest,
+    onRouteFound,
+    onMove,
+    favorites = []
 }: any) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const [styleIsReady, setStyleIsReady] = useState(false);
+    const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
     // Ruler state
     const measureRef = useRef<[number, number][]>([]);
@@ -122,11 +130,21 @@ export default function MapLibreVectorMap({
     const onSelectRef = useRef(onSelectHousehold);
     const onZoneClickRef = useRef(onZoneClick);
     const onDropRef = useRef(onHouseholdDrop);
+    const onMoveRef = useRef(onMove);
+    const favoritesRef = useRef(favorites);
+    const grappesConfigRef = useRef(grappesConfig);
+    const grappeZonesDataRef = useRef(grappeZonesData);
+    const grappeCentroidsDataRef = useRef(grappeCentroidsData);
 
     useEffect(() => { householdsRef.current = households; }, [households]);
     useEffect(() => { onSelectRef.current = onSelectHousehold; }, [onSelectHousehold]);
     useEffect(() => { onZoneClickRef.current = onZoneClick; }, [onZoneClick]);
     useEffect(() => { onDropRef.current = onHouseholdDrop; }, [onHouseholdDrop]);
+    useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
+    useEffect(() => { favoritesRef.current = favorites; }, [favorites]);
+    useEffect(() => { grappesConfigRef.current = grappesConfig; }, [grappesConfig]);
+    useEffect(() => { grappeZonesDataRef.current = grappeZonesData; }, [grappeZonesData]);
+    useEffect(() => { grappeCentroidsDataRef.current = grappeCentroidsData; }, [grappeCentroidsData]);
 
     // GéoJSON des Ménages avec correction jitter (décalage spirale pour coordonnées dupliquées)
     const householdGeoJSON = useMemo(() => {
@@ -174,6 +192,21 @@ export default function MapLibreVectorMap({
         };
     }, [households]);
 
+    // GéoJSON des Favoris
+    const favoritesGeoJSON = useMemo(() => {
+        const favoriteIds = (favorites || []).map((f: any) => f.householdId);
+        const favHouseholds = (households || []).filter((h: any) => favoriteIds.includes(h.id));
+
+        return {
+            type: 'FeatureCollection',
+            features: favHouseholds.map((h: any) => ({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [h.location.coordinates[0], h.location.coordinates[1]] },
+                properties: { id: h.id, type: 'favorite' }
+            }))
+        };
+    }, [households, favorites]);
+
     // GéoJSON des Grappes (Zones)
     const grappesGeoJSON = useMemo(() => ({
         type: 'FeatureCollection',
@@ -198,325 +231,421 @@ export default function MapLibreVectorMap({
             }))
     }), [grappesConfig]);
 
+    const setupLayersLock = useRef(false);
+
     const setupLayers = useCallback(async (map: maplibregl.Map) => {
-        if (!map) return;
+        if (!map || setupLayersLock.current) return;
 
-        await loadMapImages(map);
+        try {
+            setupLayersLock.current = true;
+            await loadMapImages(map);
 
-        if (map.getSource('households')) return;
-
-        // --- SOURCES ---
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5005';
-        map.addSource('households', {
-            type: 'vector',
-            tiles: [`${apiUrl}/api/geo/mvt/households/{z}/{x}/{y}`],
-            minzoom: 0,
-            maxzoom: 20
-        });
-
-        map.addSource('grappes', { type: 'geojson', data: grappesGeoJSON as any });
-        map.addSource('sous-grappes', { type: 'geojson', data: sousGrappesGeoJSON as any });
-
-        if (grappeZonesData) {
-            map.addSource('auto-grappes', { type: 'geojson', data: grappeZonesData });
-        } else {
-            map.addSource('auto-grappes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        }
-
-        if (grappeCentroidsData) {
-            map.addSource('auto-grappes-centroids', { type: 'geojson', data: grappeCentroidsData });
-        } else {
-            map.addSource('auto-grappes-centroids', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        }
-
-        // --- LAYERS : AUTO-GRAPPES (Régionalisation) ---
-        map.addLayer({
-            id: 'auto-grappes-fill',
-            type: 'fill',
-            source: 'auto-grappes',
-            paint: {
-                'fill-color': ['case',
-                    ['==', ['get', 'type'], 'dense'], '#10b981', // emerald
-                    ['==', ['get', 'type'], 'kmeans'], '#f59e0b', // amber
-                    '#3b82f6' // default
-                ],
-                'fill-opacity': [
-                    'case',
-                    ['boolean', ['feature-state', 'hover'], false], 0.5,
-                    0.2
-                ]
+            if (map.getSource('households')) {
+                setupLayersLock.current = false;
+                return;
             }
-        });
 
-        // Seulement visible si une spécifique est cliquée ou toutes ?
-        // On gèrera le filtre dynamiquement dans useEffect (filter: ['==', 'id', activeGrappeId] si pas null)
+            // --- SOURCES ---
+            const martinUrl = import.meta.env.VITE_MARTIN_URL || '';
 
-        map.addLayer({
-            id: 'auto-grappes-outline',
-            type: 'line',
-            source: 'auto-grappes',
-            paint: {
-                'line-color': ['case',
-                    ['==', ['get', 'type'], 'dense'], '#059669',
-                    ['==', ['get', 'type'], 'kmeans'], '#d97706',
-                    '#2563eb'
-                ],
-                'line-width': 2,
-                'line-opacity': 0.8
+            if (martinUrl) {
+                // High Performance MVT from Martin (Rust)
+                map.addSource('households', {
+                    type: 'vector',
+                    tiles: [`${martinUrl}/public.Household/{z}/{x}/{y}`],
+                    minzoom: 0,
+                    maxzoom: 20
+                });
+            } else {
+                // Legacy MVT from Node.js (Fallback)
+                const rawApiUrl = import.meta.env.VITE_API_URL || '';
+                const baseUrl = rawApiUrl.startsWith('http')
+                    ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`)
+                    : '/api';
+
+                map.addSource('households', {
+                    type: 'vector',
+                    tiles: [`${baseUrl}/geo/mvt/households/{z}/{x}/{y}`],
+                    minzoom: 0,
+                    maxzoom: 20
+                });
             }
-        });
 
-        map.addLayer({
-            id: 'auto-grappes-labels',
-            type: 'symbol',
-            source: 'auto-grappes-centroids',
-            layout: {
-                'text-field': ['concat', ['get', 'name'], '\n', ['get', 'count'], ' pts'],
-                'text-size': 12,
-                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-                'text-offset': [0, 0],
-                'text-anchor': 'center'
-            },
-            paint: {
-                'text-color': '#1e293b',
-                'text-halo-color': '#ffffff',
-                'text-halo-width': 2
+            if (!map.getSource('grappes')) {
+                map.addSource('grappes', { type: 'geojson', data: grappesGeoJSON as any });
             }
-        });
-
-        // --- LAYERS : ZONES (Grappes Manuelles/Anciennes) ---
-        map.addLayer({
-            id: 'grappes-layer',
-            type: 'circle',
-            source: 'grappes',
-            layout: { visibility: showZones ? 'visible' : 'none' },
-            paint: {
-                'circle-radius': 25,
-                'circle-color': '#4f46e5',
-                'circle-opacity': 0.2,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#4f46e5'
+            if (!map.getSource('sous-grappes')) {
+                map.addSource('sous-grappes', { type: 'geojson', data: sousGrappesGeoJSON as any });
             }
-        });
 
-        map.addLayer({
-            id: 'grappes-labels',
-            type: 'symbol',
-            source: 'grappes',
-            layout: {
-                visibility: showZones ? 'visible' : 'none',
-                'text-field': ['get', 'nom'],
-                'text-size': 10,
-                'text-offset': [0, 3],
-                'text-anchor': 'top'
-            },
-            paint: { 'text-color': '#4f46e5', 'text-halo-color': '#fff', 'text-halo-width': 1 }
-        });
-
-        // --- LAYERS : SOUS-GRAPPES ---
-        map.addLayer({
-            id: 'sous-grappes-layer',
-            type: 'circle',
-            source: 'sous-grappes',
-            layout: { visibility: showZones ? 'visible' : 'none' },
-            paint: {
-                'circle-radius': 12,
-                'circle-color': '#10b981',
-                'circle-opacity': 0.3,
-                'circle-stroke-width': 1.5,
-                'circle-stroke-color': '#10b981'
+            if (!map.getSource('auto-grappes')) {
+                if (grappeZonesDataRef.current) {
+                    map.addSource('auto-grappes', { type: 'geojson', data: grappeZonesDataRef.current });
+                } else {
+                    map.addSource('auto-grappes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+                }
             }
-        });
 
-        // --- LAYERS : MVT HOUSEHOLDS (Heatmap) ---
-        map.addLayer({
-            id: 'heatmap',
-            type: 'heatmap',
-            source: 'households',
-            'source-layer': 'households',
-            layout: { visibility: 'none' }, // toujours commencer caché
-            paint: {
-                'heatmap-weight': [
-                    'interpolate', ['linear'], ['zoom'],
-                    0, 0.3,
-                    15, 1
-                ],
-                'heatmap-intensity': [
-                    'interpolate', ['linear'], ['zoom'],
-                    0, 0.5,
-                    15, 3
-                ],
-                'heatmap-radius': [
-                    'interpolate', ['linear'], ['zoom'],
-                    0, 8,
-                    15, 30
-                ],
-                'heatmap-opacity': 0.7,
-                'heatmap-color': [
-                    'interpolate', ['linear'], ['heatmap-density'],
-                    0, 'rgba(0,0,0,0)',
-                    0.1, '#4f46e5',
-                    0.3, '#7c3aed',
-                    0.5, '#ef4444',
-                    0.8, '#f97316',
-                    1, '#fbbf24'
-                ]
+            if (!map.getSource('auto-grappes-centroids')) {
+                if (grappeCentroidsDataRef.current) {
+                    map.addSource('auto-grappes-centroids', { type: 'geojson', data: grappeCentroidsDataRef.current });
+                } else {
+                    map.addSource('auto-grappes-centroids', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+                }
             }
-        });
 
-        // --- LAYERS : MVT POINTS ---
-        map.addLayer({
-            id: 'unclustered-points',
-            type: 'circle',
-            source: 'households',
-            'source-layer': 'households',
-            paint: {
-                'circle-radius': 4,
-                'circle-color': [
-                    'match',
-                    ['get', 'status'],
-                    'Terminé', '#10b981',
-                    'Problème', '#ef4444',
-                    'En cours', '#3b82f6',
-                    '#94a3b8' // default / Non débuté
-                ],
-                'circle-stroke-width': 1,
-                'circle-stroke-color': '#ffffff'
+            // Source pour les favoris
+            if (!map.getSource('favorites-source')) {
+                map.addSource('favorites-source', {
+                    type: 'geojson',
+                    data: favoritesGeoJSON as any
+                });
             }
-        });
 
-        // Source temporaire pour le drag & drop (visual feedback)
-        map.addSource('drag-point', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
-        });
-
-        map.addLayer({
-            id: 'drag-point-layer',
-            type: 'circle',
-            source: 'drag-point',
-            paint: {
-                'circle-radius': 7,
-                'circle-color': '#f59e0b',
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff'
-            }
-        });
-
-        // --- INTERACTIONS ---
-        const setupInteraction = (layerId: string) => {
-            map.on('mouseenter', layerId, () => {
-                if (!readOnly || layerId === 'clusters' || layerId === 'grappes-layer' || layerId === 'auto-grappes-fill') {
-                    map.getCanvas().style.cursor = 'pointer';
+            map.addLayer({
+                id: 'favorites-layer',
+                type: 'circle',
+                source: 'favorites-source',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#fbbf24',
+                    'circle-opacity': 0.4,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fbbf24'
                 }
             });
-            map.on('mouseleave', layerId, () => map.getCanvas().style.cursor = '');
-        };
 
-        ['unclustered-points', 'grappes-layer', 'sous-grappes-layer', 'grappes-labels', 'auto-grappes-fill'].forEach(setupInteraction);
+            map.addLayer({
+                id: 'favorites-outline',
+                type: 'circle',
+                source: 'favorites-source',
+                paint: {
+                    'circle-radius': 12,
+                    'circle-color': 'transparent',
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#fbbf24',
+                    'circle-stroke-opacity': 0.5
+                }
+            });
 
-        // Survol Auto-Grappes
-        let hoveredAutoGrappeId: string | number | null = null;
-        map.on('mousemove', 'auto-grappes-fill', (e) => {
-            if (e.features && e.features.length > 0) {
+            // Source pour l'itinéraire de routage
+            if (!map.getSource('route-source')) {
+                map.addSource('route-source', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+            }
+
+            map.addLayer({
+                id: 'route-layer',
+                type: 'line',
+                source: 'route-source',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#10b981',
+                    'line-width': 5,
+                    'line-opacity': 0.8
+                }
+            });
+
+            // --- LAYERS : AUTO-GRAPPES (Régionalisation) ---
+            map.addLayer({
+                id: 'auto-grappes-fill',
+                type: 'fill',
+                source: 'auto-grappes',
+                paint: {
+                    'fill-color': ['case',
+                        ['==', ['get', 'type'], 'dense'], '#10b981', // emerald
+                        ['==', ['get', 'type'], 'kmeans'], '#f59e0b', // amber
+                        '#3b82f6' // default
+                    ],
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['feature-state', 'hover'], false], 0.5,
+                        0.2
+                    ]
+                }
+            });
+
+            // Seulement visible si une spécifique est cliquée ou toutes ?
+            // On gèrera le filtre dynamiquement dans useEffect (filter: ['==', 'id', activeGrappeId] si pas null)
+
+            map.addLayer({
+                id: 'auto-grappes-outline',
+                type: 'line',
+                source: 'auto-grappes',
+                paint: {
+                    'line-color': ['case',
+                        ['==', ['get', 'type'], 'dense'], '#059669',
+                        ['==', ['get', 'type'], 'kmeans'], '#d97706',
+                        '#2563eb'
+                    ],
+                    'line-width': 2,
+                    'line-opacity': 0.8
+                }
+            });
+
+            if (map.getSource('auto-grappes-centroids')) {
+                map.addLayer({
+                    id: 'auto-grappes-labels',
+                    type: 'symbol',
+                    source: 'auto-grappes-centroids',
+                    layout: {
+                        'text-field': ['concat', ['get', 'name'], '\n', ['get', 'count'], ' pts'],
+                        'text-size': 12,
+                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-offset': [0, 0],
+                        'text-anchor': 'center'
+                    },
+                    paint: {
+                        'text-color': '#1e293b',
+                        'text-halo-color': '#ffffff',
+                        'text-halo-width': 2
+                    }
+                });
+            }
+
+            // --- LAYERS : ZONES (Grappes Manuelles/Anciennes) ---
+            map.addLayer({
+                id: 'grappes-layer',
+                type: 'circle',
+                source: 'grappes',
+                layout: { visibility: showZones ? 'visible' : 'none' },
+                paint: {
+                    'circle-radius': 25,
+                    'circle-color': '#4f46e5',
+                    'circle-opacity': 0.2,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#4f46e5'
+                }
+            });
+
+            map.addLayer({
+                id: 'grappes-labels',
+                type: 'symbol',
+                source: 'grappes',
+                layout: {
+                    visibility: showZones ? 'visible' : 'none',
+                    'text-field': ['get', 'nom'],
+                    'text-size': 10,
+                    'text-offset': [0, 3],
+                    'text-anchor': 'top'
+                },
+                paint: { 'text-color': '#4f46e5', 'text-halo-color': '#fff', 'text-halo-width': 1 }
+            });
+
+            // --- LAYERS : SOUS-GRAPPES ---
+            map.addLayer({
+                id: 'sous-grappes-layer',
+                type: 'circle',
+                source: 'sous-grappes',
+                layout: { visibility: showZones ? 'visible' : 'none' },
+                paint: {
+                    'circle-radius': 12,
+                    'circle-color': '#10b981',
+                    'circle-opacity': 0.3,
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': '#10b981'
+                }
+            });
+
+            // --- LAYERS : MVT HOUSEHOLDS (Heatmap) ---
+            map.addLayer({
+                id: 'heatmap',
+                type: 'heatmap',
+                source: 'households',
+                'source-layer': 'households',
+                layout: { visibility: 'none' }, // toujours commencer caché
+                paint: {
+                    'heatmap-weight': [
+                        'interpolate', ['linear'], ['zoom'],
+                        0, 0.3,
+                        15, 1
+                    ],
+                    'heatmap-intensity': [
+                        'interpolate', ['linear'], ['zoom'],
+                        0, 0.5,
+                        15, 3
+                    ],
+                    'heatmap-radius': [
+                        'interpolate', ['linear'], ['zoom'],
+                        0, 8,
+                        15, 30
+                    ],
+                    'heatmap-opacity': 0.7,
+                    'heatmap-color': [
+                        'interpolate', ['linear'], ['heatmap-density'],
+                        0, 'rgba(0,0,0,0)',
+                        0.1, '#4f46e5',
+                        0.3, '#7c3aed',
+                        0.5, '#ef4444',
+                        0.8, '#f97316',
+                        1, '#fbbf24'
+                    ]
+                }
+            });
+
+            // --- LAYERS : MVT POINTS ---
+            map.addLayer({
+                id: 'unclustered-points',
+                type: 'circle',
+                source: 'households',
+                'source-layer': 'households',
+                paint: {
+                    'circle-radius': 4,
+                    'circle-color': [
+                        'match',
+                        ['get', 'status'],
+                        'Terminé', '#10b981',
+                        'Problème', '#ef4444',
+                        'En cours', '#3b82f6',
+                        '#94a3b8' // default / Non débuté
+                    ],
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Source temporaire pour le drag & drop (visual feedback)
+            if (!map.getSource('drag-point')) {
+                map.addSource('drag-point', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+            }
+
+            map.addLayer({
+                id: 'drag-point-layer',
+                type: 'circle',
+                source: 'drag-point',
+                paint: {
+                    'circle-radius': 7,
+                    'circle-color': '#f59e0b',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // --- INTERACTIONS ---
+            const setupInteraction = (layerId: string) => {
+                map.on('mouseenter', layerId, () => {
+                    if (!readOnly || layerId === 'clusters' || layerId === 'grappes-layer' || layerId === 'auto-grappes-fill') {
+                        map.getCanvas().style.cursor = 'pointer';
+                    }
+                });
+                map.on('mouseleave', layerId, () => map.getCanvas().style.cursor = '');
+            };
+
+            ['unclustered-points', 'grappes-layer', 'sous-grappes-layer', 'grappes-labels', 'auto-grappes-fill'].forEach(setupInteraction);
+
+            // Survol Auto-Grappes
+            let hoveredAutoGrappeId: string | number | null = null;
+            map.on('mousemove', 'auto-grappes-fill', (e) => {
+                if (e.features && e.features.length > 0) {
+                    if (hoveredAutoGrappeId !== null) {
+                        map.setFeatureState(
+                            { source: 'auto-grappes', id: hoveredAutoGrappeId },
+                            { hover: false }
+                        );
+                    }
+                    hoveredAutoGrappeId = e.features[0].id as string | number;
+                    map.setFeatureState(
+                        { source: 'auto-grappes', id: hoveredAutoGrappeId },
+                        { hover: true }
+                    );
+                }
+            });
+
+            map.on('mouseleave', 'auto-grappes-fill', () => {
                 if (hoveredAutoGrappeId !== null) {
                     map.setFeatureState(
                         { source: 'auto-grappes', id: hoveredAutoGrappeId },
                         { hover: false }
                     );
                 }
-                hoveredAutoGrappeId = e.features[0].id as string | number;
-                map.setFeatureState(
-                    { source: 'auto-grappes', id: hoveredAutoGrappeId },
-                    { hover: true }
-                );
-            }
-        });
-
-        map.on('mouseleave', 'auto-grappes-fill', () => {
-            if (hoveredAutoGrappeId !== null) {
-                map.setFeatureState(
-                    { source: 'auto-grappes', id: hoveredAutoGrappeId },
-                    { hover: false }
-                );
-            }
-            hoveredAutoGrappeId = null;
-        });
+                hoveredAutoGrappeId = null;
+            });
 
 
 
-        // INTERACTIONS DRAG & DROP
-        let isDragging = false;
-        let draggedFeatureId: string | null = null;
+            // INTERACTIONS DRAG & DROP
+            let isDragging = false;
+            let draggedFeatureId: string | null = null;
 
-        map.on('mousedown', 'unclustered-points', (e) => {
-            if (readOnly) return;
-            const feature = e.features?.[0];
-            if (!feature) return;
+            map.on('mousedown', 'unclustered-points', (e) => {
+                if (readOnly) return;
+                const feature = e.features?.[0];
+                if (!feature) return;
 
-            // Prevent map panning
-            e.preventDefault();
-            isDragging = true;
-            draggedFeatureId = feature.properties.id;
-            map.getCanvas().style.cursor = 'grabbing';
+                // Prevent map panning
+                e.preventDefault();
+                isDragging = true;
+                draggedFeatureId = feature.properties.id;
+                map.getCanvas().style.cursor = 'grabbing';
 
-            // Hide the original point in the MVT layer if possible (filter out)
-            // Note: MVT filtering might be slow if we do it every frame, so we use a temp source
-        });
+                // Hide the original point in the MVT layer if possible (filter out)
+                // Note: MVT filtering might be slow if we do it every frame, so we use a temp source
+            });
 
-        map.on('mousemove', (e) => {
-            if (!isDragging || !draggedFeatureId) return;
+            map.on('mousemove', (e) => {
+                if (!isDragging || !draggedFeatureId) return;
 
-            // Update temp source for visual feedback
-            const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-            dragSource.setData({
-                type: 'FeatureCollection',
-                features: [{
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-                    properties: { id: draggedFeatureId }
-                }]
-            } as any);
-        });
+                // Update temp source for visual feedback
+                const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
+                dragSource.setData({
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+                        properties: { id: draggedFeatureId }
+                    }]
+                } as any);
+            });
 
-        map.on('mouseup', (e) => {
-            if (!isDragging || !draggedFeatureId) return;
+            map.on('mouseup', (e) => {
+                if (!isDragging || !draggedFeatureId) return;
 
-            isDragging = false;
-            map.getCanvas().style.cursor = '';
+                isDragging = false;
+                map.getCanvas().style.cursor = '';
 
-            // Finalize drop
-            if (onDropRef.current) {
-                onDropRef.current(draggedFeatureId, e.lngLat.lat, e.lngLat.lng);
-                toast.success("Position mise à jour !");
-            }
+                // Finalize drop
+                if (onDropRef.current) {
+                    onDropRef.current(draggedFeatureId, e.lngLat.lat, e.lngLat.lng);
+                    toast.success("Position mise à jour !");
+                }
 
-            // Reset temp source
-            const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-            dragSource.setData({ type: 'FeatureCollection', features: [] } as any);
-            draggedFeatureId = null;
-        });
+                // Reset temp source
+                const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
+                dragSource.setData({ type: 'FeatureCollection', features: [] } as any);
+                draggedFeatureId = null;
+            });
 
-        // Clic sur un point -> Sélection
-        map.on('click', 'unclustered-points', (e) => {
-            const feature = e.features?.[0];
-            if (feature) {
-                const h = householdsRef.current.find((item: any) => item.id === feature.properties.id);
-                if (h) onSelectRef.current(h);
-            }
-        });
+            // Clic sur un point -> Sélection
+            map.on('click', 'unclustered-points', (e) => {
+                const feature = e.features?.[0];
+                if (feature) {
+                    const h = householdsRef.current.find((item: any) => item.id === feature.properties.id);
+                    if (h) onSelectRef.current(h);
+                }
+            });
 
-        // Clic sur une Zone -> Navigation
-        map.on('click', 'grappes-layer', (e) => {
-            const feature = e.features?.[0];
-            if (feature && onZoneClickRef.current) {
-                const coords = (feature.geometry as any).coordinates;
-                onZoneClickRef.current([coords[1], coords[0]], 14);
-            }
-        });
+            // Clic sur une Zone -> Navigation
+            map.on('click', 'grappes-layer', (e) => {
+                const feature = e.features?.[0];
+                if (feature && onZoneClickRef.current) {
+                    const coords = (feature.geometry as any).coordinates;
+                    onZoneClickRef.current([coords[1], coords[0]], 14);
+                }
+            });
 
-        setStyleIsReady(true);
-    }, [householdGeoJSON, grappesGeoJSON, sousGrappesGeoJSON, showHeatmap, showZones, households, onSelectHousehold, onZoneClick]);
+            setStyleIsReady(true);
+        } finally {
+            setupLayersLock.current = false;
+        }
+    }, [showHeatmap, showZones]); // Reduced deps for setupLayers
 
     // Initialisation
     useEffect(() => {
@@ -533,8 +662,17 @@ export default function MapLibreVectorMap({
         map.on('load', onLoad);
         map.on('styledata', onLoad);
 
+        map.on('moveend', () => {
+            if (onMoveRef.current) {
+                const c = map.getCenter();
+                onMoveRef.current([c.lat, c.lng], map.getZoom());
+            }
+        });
+
         mapRef.current = map;
         return () => {
+            map.off('load', onLoad);
+            map.off('styledata', onLoad);
             map.remove();
             mapRef.current = null;
         };
@@ -544,15 +682,36 @@ export default function MapLibreVectorMap({
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !styleIsReady) return;
-        // Households is now MVT, so we don't call setData() for it
-        // The browser will automatically fetch tiles as we pan/zoom
+
         (map.getSource('grappes') as any)?.setData(grappesGeoJSON);
         (map.getSource('sous-grappes') as any)?.setData(sousGrappesGeoJSON);
 
-        if (grappeZonesData) (map.getSource('auto-grappes') as any)?.setData(grappeZonesData);
         if (grappeCentroidsData) (map.getSource('auto-grappes-centroids') as any)?.setData(grappeCentroidsData);
+        if (favoritesGeoJSON) (map.getSource('favorites-source') as any)?.setData(favoritesGeoJSON);
 
-    }, [householdGeoJSON, grappesGeoJSON, sousGrappesGeoJSON, styleIsReady, grappeZonesData, grappeCentroidsData]);
+    }, [householdGeoJSON, grappesGeoJSON, sousGrappesGeoJSON, styleIsReady, grappeZonesData, grappeCentroidsData, favoritesGeoJSON]);
+
+    // Sync Map View (Reactivity to center/zoom props)
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+
+        const currentCenter = map.getCenter();
+        const targetLng = Number(center[1]);
+        const targetLat = Number(center[0]);
+
+        // Only jump if there's a significant difference to avoid infinite loops or jitter
+        const isDifferent = Math.abs(currentCenter.lng - targetLng) > 0.0001 ||
+            Math.abs(currentCenter.lat - targetLat) > 0.0001;
+
+        if (isDifferent) {
+            map.flyTo({
+                center: [targetLng, targetLat],
+                zoom: zoom || map.getZoom(),
+                essential: true
+            });
+        }
+    }, [center, zoom]);
 
     // Update active auto-grappe filter
     useEffect(() => {
@@ -560,9 +719,11 @@ export default function MapLibreVectorMap({
         if (!map || !styleIsReady) return;
 
         if (activeGrappeId) {
-            map.setFilter('auto-grappes-fill', ['==', 'id', activeGrappeId]);
-            map.setFilter('auto-grappes-outline', ['==', 'id', activeGrappeId]);
-            map.setFilter('auto-grappes-labels', ['==', 'id', activeGrappeId]);
+            // Using ['get', 'id'] because activeGrappeId is a string (e.g. "G-1") 
+            // and we need to match it against the 'id' property in the GeoJSON/MVT.
+            map.setFilter('auto-grappes-fill', ['==', ['get', 'id'], activeGrappeId]);
+            map.setFilter('auto-grappes-outline', ['==', ['get', 'id'], activeGrappeId]);
+            map.setFilter('auto-grappes-labels', ['==', ['get', 'id'], activeGrappeId]);
         } else {
             map.setFilter('auto-grappes-fill', null);
             map.setFilter('auto-grappes-outline', null);
@@ -594,6 +755,57 @@ export default function MapLibreVectorMap({
             }
         }
     }, [userLocation]);
+
+    // Gestion de l'itinéraire OSRM
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !styleIsReady) return;
+
+        const fetchRoute = async () => {
+            if (!routingEnabled || !routingStart || !routingDest) {
+                (map.getSource('route-source') as any)?.setData({ type: 'FeatureCollection', features: [] });
+                return;
+            }
+
+            const startStr = `${routingStart[1]},${routingStart[0]}`;
+            const destStr = `${routingDest[1]},${routingDest[0]}`;
+
+            try {
+                setIsRoutingLoading(true);
+                const response = await fetch(`http://localhost:5000/route/v1/driving/${startStr};${destStr}?overview=full&geometries=geojson`);
+                const data = await response.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                    const routeGeoJSON = {
+                        type: 'Feature',
+                        geometry: data.routes[0].geometry,
+                        properties: {}
+                    };
+                    (map.getSource('route-source') as any).setData(routeGeoJSON);
+
+                    // Envoyer les stats (distance en mètres, durée en secondes)
+                    if (onRouteFound) {
+                        onRouteFound({
+                            distance: data.routes[0].distance,
+                            duration: data.routes[0].duration
+                        });
+                    }
+                } else {
+                    if (onRouteFound) onRouteFound(null);
+                }
+            } catch (e) {
+                console.error("Erreur routage OSRM:", e);
+                toast.error("Le service de calcul d'itinéraire est inaccessible.");
+                if (onRouteFound) onRouteFound(null);
+            } finally {
+                setIsRoutingLoading(false);
+            }
+        };
+
+        // On ne déclenche que si une interaction spécifique est attendue
+        fetchRoute();
+
+    }, [routingEnabled, routingStart, routingDest, styleIsReady]);
 
     // Custom UI fit bounds event
     useEffect(() => {
@@ -704,6 +916,13 @@ export default function MapLibreVectorMap({
     }, [center, zoom, styleIsReady]);
 
     return (
-        <div ref={containerRef} className="w-full h-full overflow-hidden bg-black" />
+        <div ref={containerRef} className="w-full h-full overflow-hidden bg-black relative">
+            {isRoutingLoading && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-bold animate-pulse">
+                    <RefreshCw size={14} className="animate-spin" />
+                    Calcul de l'itinéraire...
+                </div>
+            )}
+        </div>
     );
 }

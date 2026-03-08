@@ -144,7 +144,7 @@ export function MapDrawZonesPanel({
                                         title={`Couleur ${c}`}
                                         onClick={() => setColor(c)}
                                         className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? 'border-white scale-125' : 'border-transparent'}`}
-                                        style={{ backgroundColor: c }}
+                                        style={{ backgroundColor: c } as React.CSSProperties}
                                     />
                                 ))}
                             </div>
@@ -197,7 +197,7 @@ export function MapDrawZonesPanel({
                                     key={z.id}
                                     className={`flex items-center gap-3 p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
                                 >
-                                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: z.color }} />
+                                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: z.color } as React.CSSProperties} />
                                     <div className="flex-1 min-w-0">
                                         <p className={`text-xs font-bold truncate ${text}`}>{z.name}</p>
                                         <p className={`text-[10px] flex items-center gap-1 ${sub}`}>

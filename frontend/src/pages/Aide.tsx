@@ -196,11 +196,11 @@ export default function Aide() {
             bg: 'bg-rose-500/10 text-rose-500',
             zap: 'text-rose-400',
             content: [
-                "Architecture Vector Tiles (MapLibre GL) : rendu GPU fluide de 50 000+ points avec clustering natif automatique.",
-                "Marqueurs SVG intelligents : icônes par statut (✓ Terminé, ⚠ Problème, 🔧 Travaux, 🚚 Livraison) chargés dynamiquement.",
-                "Légende interactive cliquable : filtrez les ménages visibles par statut en un clic.",
-                "Outils intégrés dans le header : Zoom, Carte satellite/rues, Heatmap thermique, Zones, Règle de mesure.",
-                "Superposition des Grappes et Sous-grappes avec popups d'information et filtres d'équipes.",
+                "Architecture Vector Tiles (MapLibre MVT) : rendu GPU fluide de 100 000+ points avec clustering natif automatique.",
+                "Routing OSRM natif : Tracé d'itinéraire précis et calcul de distance entre votre position GPS et n'importe quel ménage.",
+                "100% Mobile Responsive : Interface et panneaux tactiles optimisés pour une utilisation fluides sur smartphone.",
+                "Géolocalisation continue : Suivi en temps réel de votre position avec bouton de recentrage dynamique.",
+                "Outils intégrés : Zoom, Carte satellite/rues, Heatmap thermique, Légende interactive, Régionalisation (Grappes).",
             ]
         },
         {
@@ -426,7 +426,7 @@ export default function Aide() {
 
             <div className={`p-6 rounded-2xl border text-center ${isDarkMode ? 'bg-indigo-900/20 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
                 <p className={`text-sm font-bold ${isDarkMode ? 'text-indigo-300' : 'text-indigo-700'}`}>
-                    GEM SaaS v3.9 — Carte Entreprise · Marqueurs SVG · Alertes Géofencing · Tournées Camion · Redis BullMQ
+                    GEM SaaS v3.9 — Routing OSRM · Tuiles MVT · Geofencing · Mobile Responsive · Redis BullMQ
                 </p>
             </div>
         </div>

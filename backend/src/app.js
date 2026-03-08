@@ -15,13 +15,19 @@ const app = express();
 app.use((req, res, next) => {
     const origin = req.headers.origin;
 
-    // Echo back the origin if it exists, or use '*' if no credentials
-    // But since we use credentials: true, we MUST provide a specific origin
-    if (origin) {
+    // Validation de l'origine
+    const allowedOrigins = Array.isArray(config.cors.origin) ? config.cors.origin : [config.cors.origin];
+    const isAllowed = allowedOrigins.includes('*') || allowedOrigins.includes(origin);
+
+    if (origin && isAllowed) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
     } else if (process.env.NODE_ENV !== 'production') {
         res.setHeader('Access-Control-Allow-Origin', '*');
+    } else {
+        // En cas de refus CORS clair, on peut ne pas mettre l'en-tête (bloquant net)
+        // Mais pour débugger l'erreur 408/preflight, on log.
+        // console.log(`CORS Blocked: ${origin}`);
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');

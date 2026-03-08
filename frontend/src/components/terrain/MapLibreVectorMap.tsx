@@ -582,33 +582,41 @@ export default function MapLibreVectorMap({
 
                 // Prevent map panning
                 e.preventDefault();
+                map.dragPan.disable();
                 isDragging = true;
                 draggedFeatureId = feature.properties.id;
                 map.getCanvas().style.cursor = 'grabbing';
-
-                // Hide the original point in the MVT layer if possible (filter out)
-                // Note: MVT filtering might be slow if we do it every frame, so we use a temp source
             });
 
+            // Listen on the WHOLE map for drag move, otherwise it drops if mouse moves too fast
             map.on('mousemove', (e) => {
                 if (!isDragging || !draggedFeatureId) return;
 
                 // Update temp source for visual feedback
                 const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-                dragSource.setData({
-                    type: 'FeatureCollection',
-                    features: [{
-                        type: 'Feature',
-                        geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-                        properties: { id: draggedFeatureId }
-                    }]
-                } as any);
+                if (dragSource) {
+                    dragSource.setData({
+                        type: 'FeatureCollection',
+                        features: [{
+                            type: 'Feature',
+                            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+                            properties: { id: draggedFeatureId }
+                        }]
+                    } as any);
+                }
             });
 
+            // Listen on the WHOLE map for mouseup
             map.on('mouseup', (e) => {
-                if (!isDragging || !draggedFeatureId) return;
+                if (!isDragging || !draggedFeatureId) {
+                    // Safety check to ensure dragPan is re-enabled if stuck
+                    if (!map.dragPan.isEnabled()) map.dragPan.enable();
+                    return;
+                }
 
                 isDragging = false;
+                draggedFeatureId = null;
+                map.dragPan.enable();
                 map.getCanvas().style.cursor = '';
 
                 // Finalize drop
@@ -619,8 +627,9 @@ export default function MapLibreVectorMap({
 
                 // Reset temp source
                 const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-                dragSource.setData({ type: 'FeatureCollection', features: [] } as any);
-                draggedFeatureId = null;
+                if (dragSource) {
+                    dragSource.setData({ type: 'FeatureCollection', features: [] } as any);
+                }
             });
 
             // Clic sur un point -> Sélection
@@ -692,12 +701,14 @@ export default function MapLibreVectorMap({
     }, [householdGeoJSON, grappesGeoJSON, sousGrappesGeoJSON, styleIsReady, grappeZonesData, grappeCentroidsData, favoritesGeoJSON]);
 
     // Sync Map View (Reactivity to center/zoom props)
+    // To prevent the map from freezing during drag, we only flyTo if the user isn't interacting
+    // AND if the distance is significant enough to mean "the user clicked Recenter".
     useEffect(() => {
         const map = mapRef.current;
         if (!map) return;
 
         // Prevent programmatic flyTo if the user is interacting with the map
-        // MapLibre uses isZooming(), isMoving(), isRotating()
+        // map.isMoving() is often true during dragPan, but we also check common events
         if (map.isMoving() || map.isZooming() || map.isRotating()) {
             return;
         }
@@ -706,15 +717,17 @@ export default function MapLibreVectorMap({
         const targetLng = Number(center[1]);
         const targetLat = Number(center[0]);
 
-        // Only jump if there's a significant difference to avoid infinite loops or jitter
-        const isDifferent = Math.abs(currentCenter.lng - targetLng) > 0.0001 ||
-            Math.abs(currentCenter.lat - targetLat) > 0.0001;
+        // Only jump if there's a significant difference (e.g. recenter button clicked)
+        // 0.001 represents ~110 meters, enough to ignore slight drag/drift syncs
+        const isDifferent = Math.abs(currentCenter.lng - targetLng) > 0.001 ||
+            Math.abs(currentCenter.lat - targetLat) > 0.001 ||
+            Math.abs(map.getZoom() - (zoom || 11)) > 0.5;
 
         if (isDifferent) {
             map.flyTo({
                 center: [targetLng, targetLat],
                 zoom: zoom || map.getZoom(),
-                duration: 1200, // Smooth transition
+                duration: 800, // Smooth transition
                 essential: true
             });
         }
@@ -916,12 +929,12 @@ export default function MapLibreVectorMap({
         }
     }, [showHeatmap, showZones, styleIsReady]);
 
-    // Flyto
-    useEffect(() => {
-        if (mapRef.current && styleIsReady) {
-            mapRef.current.easeTo({ center: [Number(center[1]), Number(center[0])], zoom: zoom || 11, duration: 800 });
-        }
-    }, [center, zoom, styleIsReady]);
+    // Commenting out conflicting flyTo that forces constant recentering
+    // useEffect(() => {
+    //     if (mapRef.current && styleIsReady) {
+    //         mapRef.current.easeTo({ center: [Number(center[1]), Number(center[0])], zoom: zoom || 11, duration: 800 });
+    //     }
+    // }, [center, zoom, styleIsReady]);
 
     return (
         <div ref={containerRef} className="w-full h-full overflow-hidden bg-black relative">

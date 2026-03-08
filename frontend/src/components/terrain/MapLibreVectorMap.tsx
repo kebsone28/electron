@@ -696,6 +696,12 @@ export default function MapLibreVectorMap({
         const map = mapRef.current;
         if (!map) return;
 
+        // Prevent programmatic flyTo if the user is interacting with the map
+        // MapLibre uses isZooming(), isMoving(), isRotating()
+        if (map.isMoving() || map.isZooming() || map.isRotating()) {
+            return;
+        }
+
         const currentCenter = map.getCenter();
         const targetLng = Number(center[1]);
         const targetLat = Number(center[0]);
@@ -708,10 +714,12 @@ export default function MapLibreVectorMap({
             map.flyTo({
                 center: [targetLng, targetLat],
                 zoom: zoom || map.getZoom(),
+                duration: 1200, // Smooth transition
                 essential: true
             });
         }
-    }, [center, zoom]);
+    }, [center[0], center[1], zoom]);
+
 
     // Update active auto-grappe filter
     useEffect(() => {

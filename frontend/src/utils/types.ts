@@ -25,6 +25,13 @@ export interface Household {
     photo?: string;
     compteurPhoto?: string;
     version?: number;
+    grappeId?: string;
+    grappeName?: string;
+    village?: string;
+    departement?: string;
+    phone?: string;
+    ownerPhone?: string;
+    koboData?: any;
     delivery?: {
         agent?: string;
         date?: string;
@@ -51,6 +58,9 @@ export interface Household {
         reseauOk?: boolean;
         interieurOk?: boolean;
         controleOk?: boolean;
+        village?: string;
+        departement?: string;
+        tel?: string;
     }
 }
 

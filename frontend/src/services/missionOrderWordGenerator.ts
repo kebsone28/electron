@@ -1,6 +1,7 @@
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, ImageRun, WidthType, Footer, PageNumber } from 'docx';
 import { saveAs } from 'file-saver';
 import type { MissionOrderData } from './missionOrderGenerator';
+import logger from '../utils/logger';
 
 const formatCurrency = (n: number): string => {
     return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
@@ -15,7 +16,7 @@ export const generateMissionOrderWord = async (data: MissionOrderData) => {
             logoData = await response.arrayBuffer();
         }
     } catch (e) {
-        console.error("Could not load logo for Word", e);
+        logger.error("Could not load logo for Word", e);
     }
 
     // Header Table for Logo and Date

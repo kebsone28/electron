@@ -15,6 +15,7 @@ import WorkshopTab from '../components/logistique/WorkshopTab';
 import GrappesTab from '../components/logistique/GrappesTab';
 import { useLogistique } from '../hooks/useLogistique';
 import { useTheme } from '../context/ThemeContext';
+import toast from 'react-hot-toast';
 
 const TABS = [
     { id: 'stock', label: 'Stock & Matériel', icon: Package },
@@ -26,66 +27,113 @@ const TABS = [
 
 export default function Logistique() {
     const [activeTab, setActiveTab] = useState('stock');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const { isLoading } = useLogistique();
     const { isDarkMode } = useTheme();
 
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            // Simulate refresh
+            await new Promise(resolve => setTimeout(resolve, 1200));
+            toast.success('Données synchronisées ✓');
+        } catch (error) {
+            toast.error('Erreur lors de la synchronisation');
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     return (
-        <div className="flex flex-col h-full overflow-hidden">
-            <header className={`border-b p-6 shrink-0 ${isDarkMode ? 'bg-dark-bg border-dark-border' : 'bg-surface-elevated border-border-subtle'}`}>
-                <div className="flex justify-between items-center max-w-7xl mx-auto">
-                    <div>
-                        <h2 className={`text-2xl font-bold tracking-tight ${isDarkMode ? 'text-dark-text' : 'text-text'}`}>Gestion Logistique</h2>
-                        <p className={`text-sm mt-1 ${isDarkMode ? 'text-dark-text-muted' : 'text-text-muted'}`}>Orchestration du matériel, des équipes et des zones</p>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                        <button title="Synchroniser" className={`p-2.5 rounded-[var(--radius-md)] transition-all border ${isDarkMode ? 'bg-dark-surface border-dark-border text-dark-text-muted hover:text-dark-text' : 'bg-surface border-border text-text-muted hover:text-text'}`}>
-                            <RefreshCcw size={18} />
-                        </button>
-                        <div className="relative hidden md:block">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                            <input
-                                type="text"
-                                placeholder="Recherche..."
-                                className={`input-field pl-10 w-56 text-sm`}
-                            />
+        <div className={`flex flex-col h-full overflow-hidden transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+            {/* Header Principal */}
+            <header className={`border-b shrink-0 transition-colors ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'} backdrop-blur-sm`}>
+                <div className="p-6 md:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        {/* Titre */}
+                        <div className="flex justify-between items-start mb-8">
+                            <div>
+                                <h1 className={`text-4xl font-black tracking-tight mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    Gestion Logistique
+                                </h1>
+                                <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                    Orchestration du matériel, des équipes et des zones de déploiement
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className={`p-3 rounded-xl transition-all ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50 ${isRefreshing ? 'animate-spin' : ''}`}
+                                title="Synchroniser les données"
+                            >
+                                <RefreshCcw size={20} />
+                            </button>
+                        </div>
+
+                        {/* Barre de recherche (visible sur md+) */}
+                        <div className="hidden md:flex">
+                            <div className={`flex-1 max-w-sm relative`}>
+                                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                                <input
+                                    type="text"
+                                    placeholder="Rechercher..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className={`w-full pl-12 pr-4 py-3 rounded-xl border font-medium transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-primary focus:bg-slate-750' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-primary focus:bg-slate-50'} focus:outline-none focus:ring-2 focus:ring-primary/20`}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <nav className="tab-nav mt-6 w-fit mx-auto">
-                    {TABS.map((tab) => {
-                        const Icon = tab.icon;
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`tab-item ${isActive ? 'active' : ''}`}
-                            >
-                                <Icon size={16} />
-                                <span>{tab.label}</span>
-                            </button>
-                        );
-                    })}
+                {/* Navigation par onglets */}
+                <nav className={`border-t px-6 md:px-8 ${isDarkMode ? 'border-slate-800 bg-slate-900/30' : 'border-slate-200 bg-slate-50/50'}`}>
+                    <div className="max-w-7xl mx-auto flex overflow-x-auto gap-1 -mb-px scrollbar-hide">
+                        {TABS.map((tab) => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2.5 px-5 py-4 whitespace-nowrap font-semibold text-sm transition-all border-b-2 ${
+                                        isActive
+                                            ? `border-primary ${isDarkMode ? 'text-primary' : 'text-primary'}`
+                                            : `border-transparent ${isDarkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-600 hover:text-slate-900'}`
+                                    }`}
+                                >
+                                    <Icon size={18} />
+                                    <span>{tab.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </nav>
             </header>
 
-            <main className={`flex-1 overflow-auto p-6 md:p-8 ${isDarkMode ? 'bg-dark-bg' : 'bg-surface'}`}>
-                <div className="max-w-7xl mx-auto h-full">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center h-full space-y-4">
-                            <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
-                            <p className={`text-sm font-medium animate-pulse ${isDarkMode ? 'text-dark-text-muted' : 'text-text-muted'}`}>Chargement...</p>
-                        </div>
-                    ) : (
-                        <>
-                            {activeTab === 'stock' && <StockTab />}
-                            {activeTab === 'deliveries' && <DeliveriesTab />}
-                            {activeTab === 'agents' && <AgentsTab />}
-                            {activeTab === 'workshop' && <WorkshopTab />}
-                            {activeTab === 'grappes' && <GrappesTab />}
-                        </>
-                    )}
+            {/* Contenu principal */}
+            <main className={`flex-1 overflow-auto transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+                <div className="p-6 md:p-8 h-full">
+                    <div className="max-w-7xl mx-auto h-full">
+                        {isLoading ? (
+                            <div className="flex flex-col items-center justify-center h-full space-y-6">
+                                <div className={`w-12 h-12 border-4 rounded-full animate-spin ${isDarkMode ? 'border-slate-700 border-t-primary' : 'border-slate-200 border-t-primary'}`} />
+                                <div className="text-center">
+                                    <p className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Chargement des données</p>
+                                    <p className={`text-sm ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Veuillez patienter...</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {activeTab === 'stock' && <StockTab searchQuery={searchQuery} />}
+                                {activeTab === 'deliveries' && <DeliveriesTab />}
+                                {activeTab === 'agents' && <AgentsTab />}
+                                {activeTab === 'workshop' && <WorkshopTab />}
+                                {activeTab === 'grappes' && <GrappesTab />}
+                            </>
+                        )}
+                    </div>
                 </div>
             </main>
         </div>

@@ -1,0 +1,109 @@
+/**
+ * Supercluster Integration
+ * High-performance clustering for 50,000+ points
+ * 
+ * Used in MapLibre to replace native clustering for better performance
+ */
+
+import Supercluster from 'supercluster';
+import type { Feature, Point } from 'geojson';
+
+export interface ClusteredPoint {
+    type: 'cluster' | 'point';
+    id: string;
+    geometry: {
+        coordinates: [number, number];
+    };
+    properties: any;
+}
+
+/**
+ * Initialize Supercluster with map points
+ */
+export function initializeSupercluster(points: Feature<Point>[], options?: any) {
+    const cluster = new Supercluster({
+        radius: 80,
+        maxZoom: 17,
+        minZoom: 0,
+        ...options
+    });
+
+    // Add all points to cluster (cast to Supercluster expected type)
+    cluster.load(points as any);
+
+    return cluster;
+}
+
+/**
+ * Get clusters and individual points for current map view
+ */
+export function getClustersForZoom(
+    supercluster: Supercluster,
+    bbox: [number, number, number, number],
+    zoom: number
+): ClusteredPoint[] {
+    return supercluster.getClusters(bbox, Math.floor(zoom)) as any;
+}
+
+/**
+ * Expand a cluster to get child points
+ */
+export function expandCluster(
+    supercluster: Supercluster,
+    clusterId: number
+): Feature<Point>[] {
+    return supercluster.getChildren(clusterId) as any;
+}
+
+/**
+ * Get all points in a cluster recursively
+ */
+export function getClusterExpansionZoom(
+    supercluster: Supercluster,
+    clusterId: number
+): number {
+    return supercluster.getClusterExpansionZoom(clusterId);
+}
+
+/**
+ * Convert household data to GeoJSON points for clustering
+ */
+export function householdsToGeoJSON(households: any[]): Feature<Point>[] {
+    return households
+        .filter((h) => h.location?.coordinates && h.location.coordinates.length === 2)
+        .map((h) => ({
+            type: 'Feature' as const,
+            geometry: {
+                type: 'Point' as const,
+                coordinates: [
+                    Number(h.location.coordinates[0]),
+                    Number(h.location.coordinates[1])
+                ] as [number, number]
+            },
+            properties: {
+                id: h.id,
+                status: h.status,
+                name: h.owner?.name || 'N/A'
+            }
+        }));
+}
+
+/**
+ * Get color for cluster based on point count
+ */
+export function getClusterColor(pointCount: number): string {
+    if (pointCount >= 100) return '#f43f5e'; // Red
+    if (pointCount >= 50) return '#f59e0b'; // Orange
+    if (pointCount >= 20) return '#fbbf24'; // Yellow
+    return '#34d399'; // Green
+}
+
+/**
+ * Format cluster display
+ */
+export function formatClusterLabel(pointCount: number): string {
+    if (pointCount >= 1000) {
+        return `${(pointCount / 1000).toFixed(1)}k`;
+    }
+    return String(pointCount);
+}

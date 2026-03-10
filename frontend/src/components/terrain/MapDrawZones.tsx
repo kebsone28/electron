@@ -3,7 +3,7 @@
  *
  * Outil de dessin de zones polygonales sur la carte.
  * Permet de délimiter des secteurs d'intervention et d'assigner une équipe.
- * Stockage en localStorage (zones persistantes).
+ * Stockage en safeStorage (zones persistantes).
  */
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -30,24 +30,26 @@ const ZONE_COLORS = [
 const TEAMS = ['Maçons', 'Réseau', 'Électriciens', 'Livreurs', 'Non assigné'];
 const STORAGE_KEY = 'gem_drawn_zones';
 
+import * as safeStorage from '../../utils/safeStorage';
+
 
 
 export function useDrawnZones() {
     const [zones, setZones] = useState<DrawnZone[]>(() => {
         try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            return JSON.parse(safeStorage.getItem(STORAGE_KEY) || '[]');
         } catch { return []; }
     });
 
     const saveZones = useCallback((z: DrawnZone[]) => {
         setZones(z);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(z));
+        safeStorage.setItem(STORAGE_KEY, JSON.stringify(z));
     }, []);
 
     const addZone = useCallback((zone: DrawnZone) => {
         setZones(prev => {
             const next = [...prev, zone];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            safeStorage.setItem(STORAGE_KEY, JSON.stringify(next));
             return next;
         });
     }, []);
@@ -55,7 +57,7 @@ export function useDrawnZones() {
     const deleteZone = useCallback((id: string) => {
         setZones(prev => {
             const next = prev.filter(z => z.id !== id);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            safeStorage.setItem(STORAGE_KEY, JSON.stringify(next));
             return next;
         });
     }, []);

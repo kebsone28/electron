@@ -11,84 +11,30 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import { getHouseholdDerivedStatus } from '../../utils/statusUtils';
+import { householdsToGeoJSON } from '../../utils/clusteringUtils';
+import { useViewportLoading } from '../../hooks/useViewportLoading';
+import logger from '../../utils/logger';
+import { senegalRegions } from '../../data/senegal-regions';
+
+// Import refactored modules
+import { 
+    getStatusColor, MAP_STYLE_DARK, MAP_STYLE_LIGHT, 
+    MAP_STYLE_SATELLITE, getIconId
+} from './mapConfig';
+import { loadMapImages, isValidCoordinate, applyJitter } from './mapUtils';
+import { useMemoDeep } from './useMapMemoization';
+import { fetchOSRMRoute, buildRouteGeoJSON } from './mapRouting';
+import { useMapInteractions } from './useMapInteractions';
+import { useMapClustering } from './useMapClustering';
+import { useMemorizedSupercluster } from './useMemorizedSupercluster';
+import { useMapMarkers } from './useMapMarkers';
+import { useMapMeasure } from './useMapMeasure';
+import { useMapVisibility } from './useMapVisibility';
 
 // ── Configuration Visuelle ──
-const STATUS_COLOR: Record<string, string> = {
-    'Contrôle conforme': '#10b981', // Vert émeraude
-    'Non conforme': '#f43f5e', // Rouge rose
-    'Intérieur terminé': '#818cf8', // Indigo clair
-    'Réseau terminé': '#3b82f6', // Bleu
-    'Murs terminés': '#f59e0b', // Ambre / Orange
-    'Livraison effectuée': '#06b6d4', // Cyan
-    'Non encore commencé': '#94a3b8' // Slate / Gris
-};
-
-const getStatusColor = (status?: string): string => {
-    if (!status) return '#94a3b8';
-    const match = Object.entries(STATUS_COLOR).find(([k]) => status.includes(k) || k.includes(status));
-    return match ? match[1] : '#94a3b8';
-};
-
-const MAP_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
-const MAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/positron';
-const MAP_STYLE_SATELLITE = 'https://tiles.openfreemap.org/styles/bright'; // Simulation for now
-
-const ICON_SVGS = {
-    'check': `<path fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>`,
-    'truck': `<path fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10 17h4V5H2v12h3M20 17h2v-9h-4m-2 2h4M17 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm-8 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>`,
-    'wrench': `<path fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`,
-    'alert': `<path fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>`,
-    'dot': `<circle cx="12" cy="12" r="5" fill="white"/>`
-};
-
-const getIconForStatus = (status: string) => {
-    if (status.includes('Contrôle conforme')) return 'check';
-    if (status.includes('Non conforme') || status.includes('Problème')) return 'alert';
-    if (status.includes('Livraison effectuée')) return 'truck';
-    if (status.includes('Murs terminés') || status.includes('Réseau terminé') || status.includes('Intérieur terminé')) return 'wrench';
-    return 'dot';
-};
-
-const createIconDataURI = (svgContent: string, color: string) => {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="11" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-        <g transform="translate(2,2) scale(0.83)">
-            ${svgContent}
-        </g>
-    </svg>`;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
-
-const getIconId = (status: string) => {
-    const match = Object.keys(STATUS_COLOR).find(k => status.includes(k));
-    return match ? `icon-${match}` : 'icon-default';
-};
-
-const loadMapImages = async (map: maplibregl.Map) => {
-    const statuses = Object.keys(STATUS_COLOR);
-    statuses.push('default');
-
-    await Promise.all(statuses.map(status => {
-        return new Promise((resolve) => {
-            const color = getStatusColor(status);
-            const iconType = getIconForStatus(status);
-            const svgContent = ICON_SVGS[iconType as keyof typeof ICON_SVGS] || ICON_SVGS['dot'];
-            const dataUri = createIconDataURI(svgContent, color);
-
-            const img = new Image();
-            img.onload = () => {
-                if (!map.hasImage(`icon-${status}`)) {
-                    map.addImage(`icon-${status}`, img);
-                }
-                resolve(null);
-            };
-            img.src = dataUri;
-        });
-    }));
-};
+// (All configurations moved to mapConfig.ts - imported above)
 
 export default function MapLibreVectorMap({
     households,
@@ -113,15 +59,13 @@ export default function MapLibreVectorMap({
     routingDest,
     onRouteFound,
     onMove,
-    favorites = []
+    favorites = [],
+    projectId
 }: any) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const [styleIsReady, setStyleIsReady] = useState(false);
     const [isRoutingLoading, setIsRoutingLoading] = useState(false);
-
-    // Ruler state
-    const measureRef = useRef<[number, number][]>([]);
 
     // Refs pour éviter les closures périmées (stale closures) dans les event listeners de MapLibre
     const householdsRef = useRef(households);
@@ -134,6 +78,34 @@ export default function MapLibreVectorMap({
     const grappeZonesDataRef = useRef(grappeZonesData);
     const grappeCentroidsDataRef = useRef(grappeCentroidsData);
 
+    // Supercluster ref for high-performance clustering
+    const superclusterRef = useMemorizedSupercluster(households);
+
+    // ✅ Hook extraction for modularity
+    const { setupInteractions } = useMapInteractions(readOnly, householdsRef, onSelectRef, onZoneClickRef, onDropRef);
+    const { setupClusteringEvents } = useMapClustering(superclusterRef);
+    const { setupUserMarker, cleanup: cleanupMarker } = useMapMarkers(userLocation);
+    const { setupMeasureTool } = useMapMeasure();
+    const { setupVisibility } = useMapVisibility(showHeatmap, showZones, styleIsReady);
+
+    // ✅ Viewport loading - Enabled for large datasets
+    // Allows loading only visible households based on map viewport
+    // Reduces bandwidth by ~95% for large datasets (50k+ points)
+    // Uses PostGIS spatial query via GET /households?bbox=...
+    const { updateViewport } = useViewportLoading({
+        enabled: true, // ✅ NOW ENABLED - requires projectId
+        projectId,
+        debounceMs: 300,
+        onHouseholdsLoaded: (households) => {
+            // Update map source with visible households
+            if (mapRef.current && households.length > 0) {
+                const geoJSON = householdsToGeoJSON(households);
+                (mapRef.current.getSource('households') as any)?.setData(geoJSON);
+                logger.log(`📍 Viewport loaded ${households.length} households`);
+            }
+        }
+    });
+
     useEffect(() => { householdsRef.current = households; }, [households]);
     useEffect(() => { onSelectRef.current = onSelectHousehold; }, [onSelectHousehold]);
     useEffect(() => { onZoneClickRef.current = onZoneClick; }, [onZoneClick]);
@@ -145,40 +117,29 @@ export default function MapLibreVectorMap({
     useEffect(() => { grappeCentroidsDataRef.current = grappeCentroidsData; }, [grappeCentroidsData]);
 
     // GéoJSON des Ménages avec correction jitter (décalage spirale pour coordonnées dupliquées)
-    const householdGeoJSON = useMemo(() => {
-        const valid = (households || []).filter((h: any) =>
-            Array.isArray(h.location?.coordinates) &&
-            h.location.coordinates.length === 2 &&
-            h.location.coordinates[0] != null &&
-            h.location.coordinates[1] != null &&
-            !isNaN(Number(h.location.coordinates[0])) &&
-            !isNaN(Number(h.location.coordinates[1]))
-        );
+    // ✅ Using useMemoDeep for deep memoization - prevents recalculation on 50k+ points
+    const householdGeoJSON = useMemoDeep(() => {
+        const valid = (households || []).filter((h: any) => isValidCoordinate(h.location?.coordinates));
 
         // Compter les doublons de coordonnées et appliquer un offset spirale
         const coordCount: Record<string, number> = {};
-        const JITTER_STEP = 0.00005; // ~5m par step
 
         return {
             type: 'FeatureCollection',
             features: valid.map((h: any) => {
-                let lon = Number(h.location.coordinates[0]);
-                let lat = Number(h.location.coordinates[1]);
-                const key = `${lon.toFixed(5)}_${lat.toFixed(5)}`;
+                let coordinates = h.location.coordinates as [number, number];
+                const key = `${coordinates[0].toFixed(5)}_${coordinates[1].toFixed(5)}`;
                 const n = coordCount[key] ?? 0;
                 coordCount[key] = n + 1;
 
+                // Apply jitter for duplicate coordinates
                 if (n > 0) {
-                    // Disposition en spirale pour éviter la superposition
-                    const angle = (n * 137.5 * Math.PI) / 180; // golden angle
-                    const radius = JITTER_STEP * Math.sqrt(n);
-                    lon += radius * Math.cos(angle);
-                    lat += radius * Math.sin(angle);
+                    coordinates = applyJitter(coordinates, n);
                 }
 
                 return {
                     type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [lon, lat] },
+                    geometry: { type: 'Point', coordinates },
                     properties: {
                         id: h.id,
                         status: getHouseholdDerivedStatus(h),
@@ -236,6 +197,14 @@ export default function MapLibreVectorMap({
 
         try {
             setupLayersLock.current = true;
+            
+            // ✅ Ensure style is fully loaded before loading images
+            if (!map.isStyleLoaded?.()) {
+                logger.log('⏳ Waiting for style to load before loading images...');
+                setupLayersLock.current = false;
+                return;
+            }
+            
             await loadMapImages(map);
 
             if (map.getSource('households')) {
@@ -285,6 +254,14 @@ export default function MapLibreVectorMap({
                 });
             }
 
+            // ✅ Source pour les clusters générés par Supercluster (mise à jour dynamique au zoom)
+            if (!map.getSource('supercluster-generated')) {
+                map.addSource('supercluster-generated', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+            }
+
             map.addLayer({
                 id: 'favorites-layer',
                 type: 'circle',
@@ -319,6 +296,14 @@ export default function MapLibreVectorMap({
                 });
             }
 
+            // Source pour les régions du Sénégal
+            if (!map.getSource('senegal-regions')) {
+                map.addSource('senegal-regions', {
+                    type: 'geojson',
+                    data: senegalRegions as any
+                });
+            }
+
             map.addLayer({
                 id: 'route-layer',
                 type: 'line',
@@ -334,11 +319,70 @@ export default function MapLibreVectorMap({
                 }
             });
 
-            // --- LAYERS : AUTO-GRAPPES (Régionalisation) ---
+            // Couche de highlight pour la route active
+            if (!map.getLayer('route-highlight-layer')) {
+                map.addLayer({
+                    id: 'route-highlight-layer',
+                    type: 'line',
+                    source: 'route-source',
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-color': '#fbbf24', // Amber pour mettre en évidence
+                        'line-width': 7,
+                        'line-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 15, 0.9]
+                    }
+                }, 'route-layer'); // Placer au-dessus de la route principale
+            }
+
+            // --- LAYERS : RÉGIONS DU SÉNÉGAL ---
+            map.addLayer({
+                id: 'senegal-regions-fill',
+                type: 'fill',
+                source: 'senegal-regions',
+                paint: {
+                    'fill-color': '#cbd5e1',
+                    'fill-opacity': 0.05
+                }
+            });
+
+            map.addLayer({
+                id: 'senegal-regions-outline',
+                type: 'line',
+                source: 'senegal-regions',
+                paint: {
+                    'line-color': '#64748b',
+                    'line-width': 1.5,
+                    'line-opacity': 0.4,
+                    'line-dasharray': [2, 2]
+                }
+            });
+
+            map.addLayer({
+                id: 'senegal-regions-label',
+                type: 'symbol',
+                source: 'senegal-regions',
+                layout: {
+                    'text-field': ['get', 'REGION'],
+                    'text-size': 12,
+                    'text-font': ['Open Sans Regular'],
+                    'text-offset': [0, 0],
+                    'text-anchor': 'center'
+                },
+                paint: {
+                    'text-color': '#475569',
+                    'text-opacity': 0.6
+                }
+            });
+
+            // --- LAYERS : AUTO-GRAPPES (Régionalisation) - TOUJOURS AFFICHÉES ---
             map.addLayer({
                 id: 'auto-grappes-fill',
                 type: 'fill',
                 source: 'auto-grappes',
+                layout: { visibility: 'visible' },
                 paint: {
                     'fill-color': ['case',
                         ['==', ['get', 'type'], 'dense'], '#10b981', // emerald
@@ -348,7 +392,7 @@ export default function MapLibreVectorMap({
                     'fill-opacity': [
                         'case',
                         ['boolean', ['feature-state', 'hover'], false], 0.5,
-                        0.2
+                        0.15
                     ]
                 }
             });
@@ -360,13 +404,14 @@ export default function MapLibreVectorMap({
                 id: 'auto-grappes-outline',
                 type: 'line',
                 source: 'auto-grappes',
+                layout: { visibility: 'visible' },
                 paint: {
                     'line-color': ['case',
                         ['==', ['get', 'type'], 'dense'], '#059669',
                         ['==', ['get', 'type'], 'kmeans'], '#d97706',
                         '#2563eb'
                     ],
-                    'line-width': 2,
+                    'line-width': 2.5,
                     'line-opacity': 0.8
                 }
             });
@@ -377,6 +422,7 @@ export default function MapLibreVectorMap({
                     type: 'symbol',
                     source: 'auto-grappes-centroids',
                     layout: {
+                        visibility: 'visible',
                         'text-field': ['concat', ['get', 'name'], '\n', ['get', 'count'], ' pts'],
                         'text-size': 12,
                         'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
@@ -391,12 +437,13 @@ export default function MapLibreVectorMap({
                 });
             }
 
-            // --- LAYERS : ZONES (Grappes Manuelles/Anciennes) ---
+            // --- LAYERS : ZONES (Grappes Manuelles/Anciennes) - MASQUÉES ---
+            // Ces couches sont désactivées - utiliser les auto-grappes à la place
             map.addLayer({
                 id: 'grappes-layer',
                 type: 'circle',
                 source: 'grappes',
-                layout: { visibility: showZones ? 'visible' : 'none' },
+                layout: { visibility: 'none' },
                 paint: {
                     'circle-radius': 25,
                     'circle-color': '#4f46e5',
@@ -411,7 +458,7 @@ export default function MapLibreVectorMap({
                 type: 'symbol',
                 source: 'grappes',
                 layout: {
-                    visibility: showZones ? 'visible' : 'none',
+                    visibility: 'none',
                     'text-field': ['get', 'nom'],
                     'text-size': 10,
                     'text-offset': [0, 3],
@@ -420,12 +467,12 @@ export default function MapLibreVectorMap({
                 paint: { 'text-color': '#4f46e5', 'text-halo-color': '#fff', 'text-halo-width': 1 }
             });
 
-            // --- LAYERS : SOUS-GRAPPES ---
+            // --- LAYERS : SOUS-GRAPPES - MASQUÉES ---
             map.addLayer({
                 id: 'sous-grappes-layer',
                 type: 'circle',
                 source: 'sous-grappes',
-                layout: { visibility: showZones ? 'visible' : 'none' },
+                layout: { visibility: 'none' },
                 paint: {
                     'circle-radius': 12,
                     'circle-color': '#10b981',
@@ -471,17 +518,56 @@ export default function MapLibreVectorMap({
             });
 
             // --- LAYERS : MVT POINTS ---
+            // ✅ Visible at ZOOM 12+ (when zoomed in, show individual points)
             map.addLayer({
                 id: 'unclustered-points',
                 type: 'symbol',
                 source: 'households',
+                minzoom: 12,  // ✅ Show points only when zoomed IN
                 layout: {
                     'icon-image': ['get', 'iconId'],
-                    'icon-size': 0.85,
+                    'icon-size': 0.60,
                     'icon-allow-overlap': true,
                     'icon-ignore-placement': true
                 }
             });
+
+            // ✅ Cluster circles layer (visible when ZOOMED OUT < zoom 12)
+            if (!map.getLayer('cluster-circles')) {
+                map.addLayer({
+                    id: 'cluster-circles',
+                    type: 'circle',
+                    source: 'supercluster-generated',
+                    maxzoom: 12,  // ✅ Only show clusters when zoomed OUT
+                    filter: ['has', 'point_count'],
+                    paint: {
+                        'circle-color': '#3b82f6',
+                        'circle-radius': ['step', ['get', 'point_count'], 15, 5, 20, 10, 25, 50, 30],
+                        'circle-stroke-width': 3,
+                        'circle-stroke-color': '#1e40af',
+                        'circle-opacity': 0.8
+                    }
+                });
+            }
+
+            // ✅ Cluster count labels (visible when zoomed out)
+            if (!map.getLayer('cluster-counts')) {
+                map.addLayer({
+                    id: 'cluster-counts',
+                    type: 'symbol',
+                    source: 'supercluster-generated',
+                    maxzoom: 12,  // ✅ Only show at low zoom like clusters
+                    filter: ['has', 'point_count'],
+                    layout: {
+                        'text-field': '{point_count_abbreviated}',
+                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-size': 12
+                    },
+                    paint: {
+                        'text-color': '#ffffff'
+                    }
+                });
+            }
 
             // Source temporaire pour le drag & drop (visual feedback)
             if (!map.getSource('drag-point')) {
@@ -503,132 +589,14 @@ export default function MapLibreVectorMap({
                 }
             });
 
-            // --- INTERACTIONS ---
-            const setupInteraction = (layerId: string) => {
-                map.on('mouseenter', layerId, () => {
-                    if (!readOnly || layerId === 'clusters' || layerId === 'grappes-layer' || layerId === 'auto-grappes-fill') {
-                        map.getCanvas().style.cursor = 'pointer';
-                    }
-                });
-                map.on('mouseleave', layerId, () => map.getCanvas().style.cursor = '');
-            };
-
-            ['unclustered-points', 'grappes-layer', 'sous-grappes-layer', 'grappes-labels', 'auto-grappes-fill'].forEach(setupInteraction);
-
-            // Survol Auto-Grappes
-            let hoveredAutoGrappeId: string | number | null = null;
-            map.on('mousemove', 'auto-grappes-fill', (e) => {
-                if (e.features && e.features.length > 0) {
-                    if (hoveredAutoGrappeId !== null) {
-                        map.setFeatureState(
-                            { source: 'auto-grappes', id: hoveredAutoGrappeId },
-                            { hover: false }
-                        );
-                    }
-                    hoveredAutoGrappeId = e.features[0].id as string | number;
-                    map.setFeatureState(
-                        { source: 'auto-grappes', id: hoveredAutoGrappeId },
-                        { hover: true }
-                    );
-                }
-            });
-
-            map.on('mouseleave', 'auto-grappes-fill', () => {
-                if (hoveredAutoGrappeId !== null) {
-                    map.setFeatureState(
-                        { source: 'auto-grappes', id: hoveredAutoGrappeId },
-                        { hover: false }
-                    );
-                }
-                hoveredAutoGrappeId = null;
-            });
-
-
-
-            // INTERACTIONS DRAG & DROP
-            let isDragging = false;
-            let draggedFeatureId: string | null = null;
-
-            map.on('mousedown', 'unclustered-points', (e) => {
-                if (readOnly) return;
-                const feature = e.features?.[0];
-                if (!feature) return;
-
-                // Prevent map panning
-                e.preventDefault();
-                map.dragPan.disable();
-                isDragging = true;
-                draggedFeatureId = feature.properties.id;
-                map.getCanvas().style.cursor = 'grabbing';
-            });
-
-            // Listen on the WHOLE map for drag move, otherwise it drops if mouse moves too fast
-            map.on('mousemove', (e) => {
-                if (!isDragging || !draggedFeatureId) return;
-
-                // Update temp source for visual feedback
-                const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-                if (dragSource) {
-                    dragSource.setData({
-                        type: 'FeatureCollection',
-                        features: [{
-                            type: 'Feature',
-                            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-                            properties: { id: draggedFeatureId }
-                        }]
-                    } as any);
-                }
-            });
-
-            // Listen on the WHOLE map for mouseup
-            map.on('mouseup', (e) => {
-                if (!isDragging || !draggedFeatureId) {
-                    // Safety check to ensure dragPan is re-enabled if stuck
-                    if (!map.dragPan.isEnabled()) map.dragPan.enable();
-                    return;
-                }
-
-                isDragging = false;
-                draggedFeatureId = null;
-                map.dragPan.enable();
-                map.getCanvas().style.cursor = '';
-
-                // Finalize drop
-                if (onDropRef.current) {
-                    onDropRef.current(draggedFeatureId, e.lngLat.lat, e.lngLat.lng);
-                    toast.success("Position mise à jour !");
-                }
-
-                // Reset temp source
-                const dragSource = map.getSource('drag-point') as maplibregl.GeoJSONSource;
-                if (dragSource) {
-                    dragSource.setData({ type: 'FeatureCollection', features: [] } as any);
-                }
-            });
-
-            // Clic sur un point -> Sélection
-            map.on('click', 'unclustered-points', (e) => {
-                const feature = e.features?.[0];
-                if (feature) {
-                    const h = householdsRef.current.find((item: any) => item.id === feature.properties.id);
-                    if (h) onSelectRef.current(h);
-                }
-            });
-
-            // Clic sur une Zone -> Navigation
-            map.on('click', 'grappes-layer', (e) => {
-                const feature = e.features?.[0];
-                if (feature && onZoneClickRef.current) {
-                    const coords = (feature.geometry as any).coordinates;
-                    onZoneClickRef.current([coords[1], coords[0]], 14);
-                }
-            });
+            // ✅ Setup interactions via hook (click, hover, drag, cursor)
+            setupInteractions(map);
 
             setStyleIsReady(true);
         } finally {
             setupLayersLock.current = false;
         }
-    }, [showHeatmap, showZones]); // Reduced deps for setupLayers
+    }, [householdGeoJSON, favoritesGeoJSON, grappesGeoJSON, sousGrappesGeoJSON, showHeatmap, showZones, setupInteractions, setupClusteringEvents]);
 
     // Initialisation
     useEffect(() => {
@@ -636,39 +604,63 @@ export default function MapLibreVectorMap({
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: isDarkMode ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
-            center: [Number(center[1]), Number(center[0])],
-            zoom: zoom || 11,
+            center: [Number(center[0]), Number(center[1])],
+            zoom: zoom || 5,
             localIdeographFontFamily: 'sans-serif'
         });
 
         const onLoad = () => setupLayers(map);
-        map.on('load', onLoad);
-        map.on('styledata', onLoad);
-
-        map.on('moveend', () => {
+        
+        // Store handlers as refs to enable proper cleanup
+        const handleMoveEnd = () => {
             if (onMoveRef.current) {
                 const c = map.getCenter();
-                onMoveRef.current([c.lat, c.lng], map.getZoom());
+                onMoveRef.current([c.lng, c.lat], map.getZoom());
             }
-        });
+
+            // ✅ Trigger viewport loading on map move
+            if (updateViewport) {
+                const bounds = map.getBounds();
+                updateViewport({
+                    lng1: bounds.getWest(),
+                    lat1: bounds.getSouth(),
+                    lng2: bounds.getEast(),
+                    lat2: bounds.getNorth()
+                });
+            }
+        };
+
+        map.on('load', onLoad);
+        // ℹ️  Only setup layers on initial map load, not on every styledata event (prevents flickering)
+        // Style changes are handled separately via the style-switching useEffect below
+        map.on('moveend', handleMoveEnd);
+
+        // ✅ Setup clustering events via hook (zoomend + moveend for supercluster updates)
+        const clusteringCleanup = setupClusteringEvents(map);
 
         mapRef.current = map;
         return () => {
+            // ✅ Cleanup clustering events
+            if (clusteringCleanup) clusteringCleanup();
+
+            // ✅ Cleanup all event listeners with proper handler references
             map.off('load', onLoad);
-            map.off('styledata', onLoad);
+            map.off('moveend', handleMoveEnd);
             map.remove();
             mapRef.current = null;
         };
-    }, []);
+    }, [setupClusteringEvents, updateViewport]);
 
     // Sync Données
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !styleIsReady) return;
 
+        // Mettre à jour les ménages avec les données filtrées/actuelles
+        (map.getSource('households') as any)?.setData(householdGeoJSON);
         (map.getSource('grappes') as any)?.setData(grappesGeoJSON);
         (map.getSource('sous-grappes') as any)?.setData(sousGrappesGeoJSON);
-
+        if (grappeZonesData) (map.getSource('auto-grappes') as any)?.setData(grappeZonesData);
         if (grappeCentroidsData) (map.getSource('auto-grappes-centroids') as any)?.setData(grappeCentroidsData);
         if (favoritesGeoJSON) (map.getSource('favorites-source') as any)?.setData(favoritesGeoJSON);
 
@@ -688,8 +680,8 @@ export default function MapLibreVectorMap({
         }
 
         const currentCenter = map.getCenter();
-        const targetLng = Number(center[1]);
-        const targetLat = Number(center[0]);
+        const targetLng = Number(center[0]);
+        const targetLat = Number(center[1]);
 
         // Only jump if there's a significant difference (e.g. recenter button clicked)
         // 0.001 represents ~110 meters, enough to ignore slight drag/drift syncs
@@ -711,95 +703,85 @@ export default function MapLibreVectorMap({
     // Update active auto-grappe filter
     useEffect(() => {
         const map = mapRef.current;
-        if (!map || !styleIsReady) return;
+        // ✅ Enhanced guards: check map exists, style is ready, AND layers exist
+        if (!map || !styleIsReady || !map.isStyleLoaded?.()) {
+            return;
+        }
 
-        if (activeGrappeId) {
-            // Using ['get', 'id'] because activeGrappeId is a string (e.g. "G-1") 
-            // and we need to match it against the 'id' property in the GeoJSON/MVT.
-            map.setFilter('auto-grappes-fill', ['==', ['get', 'id'], activeGrappeId]);
-            map.setFilter('auto-grappes-outline', ['==', ['get', 'id'], activeGrappeId]);
-            map.setFilter('auto-grappes-labels', ['==', ['get', 'id'], activeGrappeId]);
-        } else {
-            map.setFilter('auto-grappes-fill', null);
-            map.setFilter('auto-grappes-outline', null);
-            map.setFilter('auto-grappes-labels', null);
+        try {
+            // Verify layers exist before setting filters
+            const layersToFilter = ['auto-grappes-fill', 'auto-grappes-outline', 'auto-grappes-labels'];
+            const allLayersExist = layersToFilter.every(layer => map.getLayer(layer));
+            
+            if (!allLayersExist) {
+                console.debug('⏳ Grappes layers not yet ready, skipping filter update');
+                return;
+            }
+
+            if (activeGrappeId) {
+                // Using ['get', 'id'] because activeGrappeId is a string (e.g. "G-1") 
+                // and we need to match it against the 'id' property in the GeoJSON/MVT.
+                map.setFilter('auto-grappes-fill', ['==', ['get', 'id'], activeGrappeId]);
+                map.setFilter('auto-grappes-outline', ['==', ['get', 'id'], activeGrappeId]);
+                map.setFilter('auto-grappes-labels', ['==', ['get', 'id'], activeGrappeId]);
+            } else {
+                map.setFilter('auto-grappes-fill', null);
+                map.setFilter('auto-grappes-outline', null);
+                map.setFilter('auto-grappes-labels', null);
+            }
+        } catch (err) {
+            console.warn('⚠️ Error setting grappes filters:', err instanceof Error ? err.message : err);
         }
     }, [activeGrappeId, styleIsReady]);
 
-    // Live User Location Marker
-    const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+    // ✅ User location marker setup
     useEffect(() => {
-        if (!mapRef.current) return;
+        const map = mapRef.current;
+        if (!map) return;
+        setupUserMarker(map, userLocation);
 
-        if (userLocation && userLocation.length === 2) {
-            if (!userMarkerRef.current) {
-                const el = document.createElement('div');
-                el.className = 'user-location-marker';
-                el.innerHTML = `<div class="w-4 h-4 bg-blue-500 border-2 border-white rounded-full shadow-[0_0_0_3px_rgba(59,130,246,0.5)] animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]"></div>`;
-
-                userMarkerRef.current = new maplibregl.Marker({ element: el })
-                    .setLngLat([userLocation[1], userLocation[0]]) // MapLibre takes [lon, lat]
-                    .addTo(mapRef.current);
-            } else {
-                userMarkerRef.current.setLngLat([userLocation[1], userLocation[0]]);
-            }
-        } else {
-            if (userMarkerRef.current) {
-                userMarkerRef.current.remove();
-                userMarkerRef.current = null;
-            }
-        }
-    }, [userLocation]);
+        return () => { cleanupMarker(); };
+    }, [userLocation, setupUserMarker, cleanupMarker]);
 
     // Gestion de l'itinéraire OSRM
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !styleIsReady) return;
 
-        const fetchRoute = async () => {
+        const handleRouting = async () => {
             if (!routingEnabled || !routingStart || !routingDest) {
                 (map.getSource('route-source') as any)?.setData({ type: 'FeatureCollection', features: [] });
                 return;
             }
 
-            const startStr = `${routingStart[1]},${routingStart[0]}`;
-            const destStr = `${routingDest[1]},${routingDest[0]}`;
+            setIsRoutingLoading(true);
 
             try {
-                setIsRoutingLoading(true);
-                const response = await fetch(`http://localhost:5000/route/v1/driving/${startStr};${destStr}?overview=full&geometries=geojson`);
-                const data = await response.json();
+                const routeResult = await fetchOSRMRoute({
+                    start: routingStart,
+                    destination: routingDest
+                });
 
-                if (data.code === 'Ok' && data.routes && data.routes[0]) {
-                    const routeGeoJSON = {
-                        type: 'Feature',
-                        geometry: data.routes[0].geometry,
-                        properties: {}
-                    };
+                if (routeResult) {
+                    const routeGeoJSON = buildRouteGeoJSON(routeResult.geometry);
                     (map.getSource('route-source') as any).setData(routeGeoJSON);
 
-                    // Envoyer les stats (distance en mètres, durée en secondes)
                     if (onRouteFound) {
                         onRouteFound({
-                            distance: data.routes[0].distance,
-                            duration: data.routes[0].duration
+                            distance: routeResult.distance,
+                            duration: routeResult.duration,
+                            instructions: routeResult.instructions
                         });
                     }
                 } else {
                     if (onRouteFound) onRouteFound(null);
                 }
-            } catch (e) {
-                console.error("Erreur routage OSRM:", e);
-                toast.error("Le service de calcul d'itinéraire est inaccessible.");
-                if (onRouteFound) onRouteFound(null);
             } finally {
                 setIsRoutingLoading(false);
             }
         };
 
-        // On ne déclenche que si une interaction spécifique est attendue
-        fetchRoute();
-
+        handleRouting();
     }, [routingEnabled, routingStart, routingDest, styleIsReady]);
 
     // Custom UI fit bounds event
@@ -816,92 +798,48 @@ export default function MapLibreVectorMap({
         return () => window.removeEventListener('fit-bounds', handleFitBounds);
     }, []);
 
-    // Ruler Logic
+    // ✅ Ruler/Measure tool setup
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !styleIsReady) return;
-
-        const handleMeasureClick = (e: maplibregl.MapMouseEvent) => {
-            if (!isMeasuring) return;
-            const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-            measureRef.current = [...measureRef.current, pt];
-
-            updateMeasureLayer();
-        };
-
-        const updateMeasureLayer = () => {
-            const geojson: any = {
-                type: 'FeatureCollection',
-                features: []
-            };
-
-            if (measureRef.current.length > 0) {
-                geojson.features.push({
-                    type: 'Feature',
-                    geometry: { type: 'MultiPoint', coordinates: measureRef.current },
-                    properties: {}
-                });
-            }
-            if (measureRef.current.length > 1) {
-                geojson.features.push({
-                    type: 'Feature',
-                    geometry: { type: 'LineString', coordinates: measureRef.current },
-                    properties: {}
-                });
-            }
-
-            (map.getSource('measure') as any)?.setData(geojson);
-        };
-
-        if (isMeasuring) {
-            if (!map.getSource('measure')) {
-                map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-                map.addLayer({
-                    id: 'measure-line',
-                    type: 'line',
-                    source: 'measure',
-                    paint: { 'line-color': '#3b82f6', 'line-width': 3, 'line-dasharray': [2, 1] }
-                });
-                map.addLayer({
-                    id: 'measure-points',
-                    type: 'circle',
-                    source: 'measure',
-                    paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-width': 2, 'circle-stroke-color': '#3b82f6' }
-                });
-            }
-            map.on('click', handleMeasureClick);
-            map.getCanvas().style.cursor = 'crosshair';
-        } else {
-            map.off('click', handleMeasureClick);
-            map.getCanvas().style.cursor = '';
-            measureRef.current = [];
-            (map.getSource('measure') as any)?.setData({ type: 'FeatureCollection', features: [] });
-        }
-
-        return () => { map.off('click', handleMeasureClick); };
-    }, [isMeasuring, styleIsReady]);
+        const cleanup = setupMeasureTool(map, isMeasuring);
+        return cleanup;
+    }, [isMeasuring, styleIsReady, setupMeasureTool]);
 
     // Map Style Switching
     useEffect(() => {
-        if (mapRef.current) {
-            setStyleIsReady(false);
-            let style = isDarkMode ? MAP_STYLE_DARK : MAP_STYLE_LIGHT;
-            if (mapStyle === 'satellite') style = MAP_STYLE_SATELLITE;
-            mapRef.current.setStyle(style);
-        }
-    }, [isDarkMode, mapStyle]);
+        const map = mapRef.current;
+        if (!map) return;
 
-    // Visibilité
+        setStyleIsReady(false);
+        let style = isDarkMode ? MAP_STYLE_DARK : MAP_STYLE_LIGHT;
+        if (mapStyle === 'satellite') style = MAP_STYLE_SATELLITE;
+        
+        // ✅ Wait for style to be fully loaded before setting styleIsReady to true
+        const handleStyleLoad = () => {
+            setStyleIsReady(true);
+            map.off('styledata', handleStyleLoad);
+            // ✅ Reload layers only once after style change to preserve map state
+            setupLayers(map);
+        };
+        
+        map.on('styledata', handleStyleLoad);
+        map.setStyle(style);
+        
+        // Cleanup: remove listener if effect unmounts before style loads
+        return () => {
+            if (map) {
+                map.off('styledata', handleStyleLoad);
+            }
+        };
+    }, [isDarkMode, mapStyle, setupLayers]);
+
+    // ✅ Layer visibility setup
     useEffect(() => {
         const map = mapRef.current;
-        if (!map || !styleIsReady) return;
-        if (map.getLayer('heatmap')) map.setLayoutProperty('heatmap', 'visibility', showHeatmap ? 'visible' : 'none');
-        if (map.getLayer('grappes-layer')) {
-            map.setLayoutProperty('grappes-layer', 'visibility', showZones ? 'visible' : 'none');
-            map.setLayoutProperty('grappes-labels', 'visibility', showZones ? 'visible' : 'none');
-            map.setLayoutProperty('sous-grappes-layer', 'visibility', showZones ? 'visible' : 'none');
-        }
-    }, [showHeatmap, showZones, styleIsReady]);
+        if (!map) return;
+        setupVisibility(map);
+    }, [showHeatmap, showZones, styleIsReady, setupVisibility]);
 
     // Commenting out conflicting flyTo that forces constant recentering
     // useEffect(() => {

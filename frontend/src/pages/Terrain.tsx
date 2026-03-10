@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, Suspense } from 'react';
+import * as safeStorage from '../utils/safeStorage';
+import logger from '../utils/logger';
 import toast from 'react-hot-toast';
+import debounce from 'lodash.debounce';
 import {
     MapPin,
-    X,
-    Calendar,
     Navigation,
     Focus,
     Maximize,
@@ -20,18 +21,19 @@ import {
     Layers,
     PenLine,
     Wifi,
-    CloudDownload
+    CloudDownload,
+    Loader2
 } from 'lucide-react';
 import { useTerrainData } from '../hooks/useTerrainData';
 import { useAuth } from '../contexts/AuthContext';
-import MapComponent from '../components/terrain/MapComponent';
-import { getHouseholdDerivedStatus } from '../utils/statusUtils';
+const MapComponent = React.lazy(() => import('../components/terrain/MapComponent'));
+import { getHouseholdDerivedStatus, getStatusTailwindClasses } from '../utils/statusUtils';
 import type { Household } from '../utils/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../context/ThemeContext';
 import { DataHubModal } from '../components/terrain/DataHubModal';
 import { useProject } from '../hooks/useProject';
-import { useSync } from '../hooks/useSync';
+import { useSync } from '../contexts/SyncContext';
 import { useLogistique } from '../hooks/useLogistique';
 import { usePermissions } from '../hooks/usePermissions';
 import { MapRoutingPanel } from '../components/terrain/MapRoutingPanel';
@@ -43,7 +45,7 @@ import type { ExternalLayer } from '../components/terrain/GeoJsonOverlay';
 import { TeamTrackingPanel } from '../components/terrain/TeamTracking';
 import { GrappeSelectorPanel } from '../components/terrain/GrappeSelectorPanel';
 import { MapRegionDownload } from '../components/terrain/MapRegionDownload';
-import { Star } from 'lucide-react';
+import { HouseholdDetailsPanel } from '../components/terrain/HouseholdDetailsPanel';
 import { useFavorites } from '../hooks/useFavorites';
 
 import {
@@ -68,34 +70,29 @@ const Terrain: React.FC = () => {
     const {
         households,
         updateHouseholdStatus,
-        updateHouseholdLocation,
-        getHouseholdLogs
+        updateHouseholdLocation
     } = useTerrainData();
 
     const { project, projects, setActiveProjectId, createProject, deleteProject } = useProject();
-    const { sync, syncStatus } = useSync();
+    const { sync, syncStatus, isSyncing } = useSync();
     const { grappesConfig } = useLogistique();
 
     const { user } = useAuth();
     const { peut, PERMISSIONS } = usePermissions();
     const { isFavorite, toggleFavorite, favorites: localFavorites } = useFavorites(project?.id);
-    const [isSyncing, setIsSyncing] = useState(false);
 
     const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(null);
     const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
     const [showHeatmap, setShowHeatmap] = useState(false);
     const { isDarkMode } = useTheme();
-    const [mapCenter, setMapCenter] = useState<[number, number]>([14.7167, -17.4677]);
-    const [mapZoom, setMapZoom] = useState(12);
+    const [mapCenter, setMapCenter] = useState<[number, number]>([14.4563, -14.4994]);
+    const [mapZoom, setMapZoom] = useState(5);
 
     const [selectedPhases, setSelectedPhases] = useState<string[]>([
-        'Non encore commencé',
-        'Livraison effectuée',
-        'Murs terminés',
-        'Réseau terminé',
-        'Intérieur terminé',
-        'Contrôle conforme',
-        'Non conforme'
+        'Non débuté',
+        'En cours',
+        'Terminé',
+        'Problème'
     ]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -109,8 +106,8 @@ const Terrain: React.FC = () => {
     const [routingDest, setRoutingDest] = useState<[number, number] | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [routeStats, setRouteStats] = useState<{ distance: number; duration: number } | null>(null);
+    const [turnByTurnInstructions, setTurnByTurnInstructions] = useState<any[]>([]);
 
-    const [auditLogs, setAuditLogs] = useState<any[]>([]);
     const [isMeasuring, setIsMeasuring] = useState(false);
     const [showDatabaseStats, setShowDatabaseStats] = useState(false);
     const [mapStyle, setMapStyle] = useState<'streets' | 'satellite'>('streets');
@@ -124,40 +121,115 @@ const Terrain: React.FC = () => {
     const [isDownloadingOffline, setIsDownloadingOffline] = useState(false);
     const [hasAutoCentered, setHasAutoCentered] = useState(false);
     const [showRegionDownload, setShowRegionDownload] = useState(false);
-    const [downloadedRegions, setDownloadedRegions] = useState<string[]>(JSON.parse(localStorage.getItem('downloaded_regions') || '[]'));
+    
 
-    // Continuous Geolocation Watch
+const [downloadedRegions, setDownloadedRegions] = useState<string[]>(JSON.parse(safeStorage.getItem('downloaded_regions') || '[]'));
+    const [geolocationError, setGeolocationError] = useState<string | null>(null);
+    const [requestingGeolocation, setRequestingGeolocation] = useState(false);
+
+    // Initial geolocation attempt on page load
     React.useEffect(() => {
-        if (!navigator.geolocation) return;
+        if (!navigator.geolocation) {
+            setGeolocationError('Géolocalisation non disponible sur ce navigateur');
+            logger.warn('Geolocation not available');
+            return;
+        }
 
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const newLoc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-                setUserLocation(newLoc);
+        // Try to get position once on mount
+        const attemptGeolocation = () => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const newLoc: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+                    setUserLocation(newLoc);
+                    setGeolocationError(null);
+                    
+                    // Auto-center on first discovery
+                    if (!hasAutoCentered) {
+                        setMapCenter(newLoc);
+                        setMapZoom(16);
+                        setHasAutoCentered(true);
+                        logger.log('✅ Position trouvée au chargement:', newLoc);
+                    }
+                },
+                (err) => {
+                    let errorMsg = 'Position indisponible';
+                    switch(err.code) {
+                        case err.PERMISSION_DENIED:
+                            errorMsg = 'Permission refusée. Cliquez sur le bouton Focus pour activer.';
+                            break;
+                        case err.POSITION_UNAVAILABLE:
+                            errorMsg = 'Position indisponible. Vérifiez votre GPS.';
+                            break;
+                        case err.TIMEOUT:
+                            errorMsg = 'Délai d\'attente dépassé.';
+                            break;
+                    }
+                    logger.warn('❌ Geolocation error:', err.code, errorMsg);
+                    setGeolocationError(errorMsg);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        };
 
-                // Auto-center on first discovery
-                if (!hasAutoCentered) {
-                    setMapCenter(newLoc);
-                    setMapZoom(16);
-                    setHasAutoCentered(true);
-                }
-            },
-            (err) => {
-                console.warn('Geolocation watch error:', err);
-            },
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-
-        return () => navigator.geolocation.clearWatch(watchId);
+        // Schedule the geolocation attempt with a small delay
+        const timeout = setTimeout(attemptGeolocation, 500);
+        
+        return () => clearTimeout(timeout);
     }, [hasAutoCentered]);
 
     const handleRecenterOnUser = () => {
         if (userLocation) {
             setMapCenter(userLocation);
             setMapZoom(16);
+        } else if (geolocationError) {
+            // If permission denied, try to request again
+            handleRequestGeolocation();
         } else {
-            toast.error("Ma position n'est pas encore disponible");
+            toast.loading('En attente de votre position... ⏳', { duration: 3000 });
         }
+    };
+
+    const handleRequestGeolocation = () => {
+        if (!navigator.geolocation) {
+            toast.error('Géolocalisation non disponible sur ce navigateur');
+            return;
+        }
+        
+        setRequestingGeolocation(true);
+        setGeolocationError(null);
+        
+        // Request geolocation once - this should trigger the permission prompt again
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const newLoc: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+                setUserLocation(newLoc);
+                setMapCenter(newLoc);
+                setMapZoom(16);
+                setHasAutoCentered(true);
+                setRequestingGeolocation(false);
+                toast.success('✅ Position trouvée ! ' + newLoc.map(v => v.toFixed(4)).join(', '));
+                logger.log('✅ Position obtenue:', newLoc);
+            },
+            (err) => {
+                setRequestingGeolocation(false);
+                let errorMsg = 'Position indisponible';
+                switch(err.code) {
+                    case err.PERMISSION_DENIED:
+                        errorMsg = '❌ Permission refusée.\n\nPour activer :\n• Chrome/Edge : Menu ⋮ → Paramètres → Confidentialité → Permissions → Localisation\n• Firefox : Volet des autorisations en haut à gauche';
+                        break;
+                    case err.POSITION_UNAVAILABLE:
+                        errorMsg = '⚠️ Position indisponible. Vérifiez votre GPS et réessayez.';
+                        break;
+                    case err.TIMEOUT:
+                        errorMsg = '⏱️ Délai d\'attente dépassé. Réessayez.';
+                        break;
+                }
+                logger.warn('❌ Geolocation error:', err.code, errorMsg);
+                setGeolocationError(errorMsg);
+                toast.error(errorMsg, { duration: 5000 });
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
     };
     const [pendingPoints, setPendingPoints] = useState<[number, number][]>([]);
     const [showDrawPanel, setShowDrawPanel] = useState(false);
@@ -173,6 +245,10 @@ const Terrain: React.FC = () => {
     const [grappeZonesData, setGrappeZonesData] = useState<any>(null);
     const [grappeCentroidsData, setGrappeCentroidsData] = useState<any>(null);
 
+    // Debug Statistics
+    const [householdStats, setHouseholdStats] = useState({ total: 0, withoutCoords: 0, withCoords: 0, afterFilters: 0 });
+    const [showCoordWarning, setShowCoordWarning] = useState(false);
+
     React.useEffect(() => {
         const handleStatus = () => setIsOfflineMode(!navigator.onLine);
         window.addEventListener('online', handleStatus);
@@ -182,6 +258,10 @@ const Terrain: React.FC = () => {
             window.removeEventListener('offline', handleStatus);
         };
     }, []);
+
+    // ✅ Auto-sync now managed by SyncProvider globally
+    // No need to manually sync on mount here
+
 
 
 
@@ -219,24 +299,24 @@ const Terrain: React.FC = () => {
         setPendingPoints([]);
     };
 
-    React.useEffect(() => {
-        const fetchLogs = async () => {
-            if (selectedHousehold) {
-                const logs = await getHouseholdLogs(selectedHousehold.id);
-                setAuditLogs(logs);
-            }
-        };
-        fetchLogs();
-    }, [selectedHousehold, getHouseholdLogs]);
+    // Audit logs are no longer displayed in the UI
+    // React.useEffect(() => {
+    //     const fetchLogs = async () => {
+    //         if (selectedHousehold) {
+    //             const logs = await getHouseholdLogs(selectedHousehold.id);
+    //         }
+    //     };
+    //     fetchLogs();
+    // }, [selectedHousehold, getHouseholdLogs]);
 
     const handleManualSync = async () => {
-        setIsSyncing(true);
         try {
+            // isSyncing will be updated by the context
             await sync();
+            toast.success('✅ Synchronisation réussie');
         } catch (e) {
-            console.error(e);
-        } finally {
-            setIsSyncing(false);
+            logger.error(e);
+            toast.error('❌ Erreur lors de la synchronisation');
         }
     };
 
@@ -296,15 +376,43 @@ const Terrain: React.FC = () => {
 
     const householdList = (households || []) as Household[];
 
+    // Fonction pour vérifier si les coordonnées sont valides
+    const hasValidCoordinates = (h: Household): boolean => {
+        return !!(h.location?.coordinates && 
+                  Array.isArray(h.location.coordinates) &&
+                  h.location.coordinates.length === 2 &&
+                  typeof h.location.coordinates[0] === 'number' &&
+                  typeof h.location.coordinates[1] === 'number' &&
+                  !isNaN(h.location.coordinates[0]) &&
+                  !isNaN(h.location.coordinates[1]) &&
+                  Math.abs(h.location.coordinates[0]) <= 180 &&
+                  Math.abs(h.location.coordinates[1]) <= 90);
+    };
+
     const filteredHouseholds = useMemo(() => {
-        return householdList.filter(h => {
+        let rejectedByPhase = 0, rejectedByTeam = 0, rejectedByDateRange = 0;
+        const statusDistribution: any = {};
+        
+        const filtered = householdList.filter(h => {
+            // Vérifier les coordonnées d'abord
+            if (!hasValidCoordinates(h)) {
+                return false;
+            }
+
             const hStatus = getHouseholdDerivedStatus(h);
             const mappedStatus = (hStatus === 'Réception: Validée' || h.status === 'Terminé') ? 'Terminé' :
                 hStatus === 'Problème' ? 'Problème' :
                     (hStatus === 'Non débuté' || hStatus === 'Non Raccordable') ? 'Non débuté' :
                         'En cours';
+            
+            // Track status distribution
+            statusDistribution[mappedStatus] = (statusDistribution[mappedStatus] || 0) + 1;
+            
             const matchesPhase = selectedPhases.includes(mappedStatus);
-            if (!matchesPhase) return false;
+            if (!matchesPhase) {
+                rejectedByPhase++;
+                return false;
+            }
 
             const fulfillsTeamCriteria =
                 (!!h.koboSync?.livreurDate && selectedTeamFilters.includes('livraison')) ||
@@ -314,7 +422,10 @@ const Terrain: React.FC = () => {
                 (!!h.koboSync?.controleOk && selectedTeamFilters.includes('controle'));
 
             const hasAnyKoboProgress = !!h.koboSync?.livreurDate || !!h.koboSync?.maconOk || !!h.koboSync?.reseauOk || !!h.koboSync?.interieurOk || !!h.koboSync?.controleOk;
-            if (hasAnyKoboProgress && !fulfillsTeamCriteria) return false;
+            if (hasAnyKoboProgress && !fulfillsTeamCriteria) {
+                rejectedByTeam++;
+                return false;
+            }
 
             if (selectedTeam !== 'all') {
                 const assignedTeams = Array.isArray(h.assignedTeams) ? h.assignedTeams : [];
@@ -325,16 +436,79 @@ const Terrain: React.FC = () => {
                 const now = new Date();
                 const householdDate = h.delivery?.date ? new Date(h.delivery.date) : new Date();
                 const diffDays = (now.getTime() - householdDate.getTime()) / (1000 * 3600 * 24);
-                if (dateRange === '7d' && diffDays > 7) return false;
-                if (dateRange === '30d' && diffDays > 30) return false;
+                if (dateRange === '7d' && diffDays > 7) {
+                    rejectedByDateRange++;
+                    return false;
+                }
+                if (dateRange === '30d' && diffDays > 30) {
+                    rejectedByDateRange++;
+                    return false;
+                }
             }
 
             return true;
         });
+
+        // Debug: Show why items are rejected
+        console.log('🤔 [FILTER DEBUG]', {
+            totalBefore: householdList.length,
+            selectedPhases,
+            selectedTeamFilters,
+            rejectedByPhase,
+            rejectedByTeam,
+            rejectedByDateRange,
+            statusDistribution,
+            totalAfter: filtered.length
+        });
+
+        return filtered;
     }, [householdList, selectedPhases, selectedTeamFilters, selectedTeam, dateRange]);
 
-    const handleSearch = async (query: string) => {
-        setSearchQuery(query);
+    // Update stats AFTER filtering (using useEffect to avoid infinite render loop)
+    React.useEffect(() => {
+        const totalHouseholds = householdList.length;
+        const withoutCoords = householdList.filter(h => !hasValidCoordinates(h)).length;
+        const withCoords = totalHouseholds - withoutCoords;
+        const afterFilters = filteredHouseholds.length;
+        
+        // Debug logs
+        console.log('🔍 [TERRAIN DEBUG] Total ménages:', totalHouseholds);
+        if (totalHouseholds > 0) {
+            console.log('🏠 [TERRAIN DEBUG] Premier ménage:', householdList[0]);
+            console.log('🏠 [TERRAIN DEBUG] Location du premier:', householdList[0]?.location);
+            console.log('🏠 [TERRAIN DEBUG] Coordinates du premier:', householdList[0]?.location?.coordinates);
+        }
+        
+        // Afficher les 5 premiers et leurs coords
+        householdList.slice(0, 5).forEach((h, i) => {
+            console.log(`  👤 H${i}:`, {
+                id: h.id,
+                coords: h.location?.coordinates,
+                isValid: hasValidCoordinates(h),
+                locationExists: !!h.location,
+                coordsIsArray: Array.isArray(h.location?.coordinates),
+                coordsLength: h.location?.coordinates?.length
+            });
+        });
+        
+        setHouseholdStats({ 
+            total: totalHouseholds, 
+            withoutCoords, 
+            withCoords,
+            afterFilters 
+        });
+        
+        if (withoutCoords > 0) {
+            setShowCoordWarning(true);
+        }
+        
+        if (totalHouseholds > 0) {
+            logger.log(`📊 MÉNAGES: Total=${totalHouseholds}, Valid coords=${withCoords} (${((withCoords/totalHouseholds)*100).toFixed(1)}%), Sans coords=${withoutCoords} (${((withoutCoords/totalHouseholds)*100).toFixed(1)}%), Après filtres=${afterFilters}`);
+        }
+    }, [filteredHouseholds, householdList]);
+
+    // search with debounce to avoid iterating thousands of households on every keystroke
+    const performSearch = useCallback(async (query: string) => {
         if (!query.trim()) {
             setSearchResults([]);
             return;
@@ -368,12 +542,14 @@ const Terrain: React.FC = () => {
                 });
             });
         } catch (e) {
-            console.error('Search error:', e);
+            logger.error('Search error:', e);
         }
 
         setSearchResults(results);
         setIsSearching(false);
-    };
+    }, [householdList]);
+
+    const debouncedSearch = useMemo(() => debounce(performSearch, 300), [performSearch]);
 
     const handleSelectResult = (result: SearchResult) => {
         if (result.type === 'household') {
@@ -403,19 +579,9 @@ const Terrain: React.FC = () => {
     };
 
     const handleRecenter = () => {
-        setMapCenter([14.7167, -17.4677]);
-        setMapZoom(12);
-    };
-
-    const handleLocate = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((pos) => {
-                const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-                setUserLocation(loc);
-                setMapCenter(loc);
-                setMapZoom(16);
-            });
-        }
+        // Center of Senegal approx, with zoom 7 to see the whole country
+        setMapCenter([14.4563, -14.4994]);
+        setMapZoom(7);
     };
 
     const handleTraceItinerary = () => {
@@ -438,8 +604,9 @@ const Terrain: React.FC = () => {
         }
     };
 
-    const handleRouteFound = (stats: { distance: number; duration: number } | null) => {
-        setRouteStats(stats);
+    const handleRouteFound = (stats: { distance: number; duration: number; instructions?: any[] } | null) => {
+        setRouteStats(stats ? { distance: stats.distance, duration: stats.duration } : null);
+        setTurnByTurnInstructions(stats?.instructions || []);
     };
 
     return (
@@ -469,7 +636,7 @@ const Terrain: React.FC = () => {
                                     <input
                                         type="text"
                                         value={searchQuery}
-                                        onChange={(e) => handleSearch(e.target.value)}
+                                        onChange={(e) => { setSearchQuery(e.target.value); debouncedSearch(e.target.value); }}
                                         title="Rechercher"
                                         placeholder="Rechercher une borne, un village ou un client..."
                                         className={`w-full bg-transparent border-none outline-none text-[11px] font-bold py-2 ${isDarkMode ? 'text-white placeholder:text-slate-600' : 'text-slate-700 placeholder:text-slate-400'}`}
@@ -486,7 +653,7 @@ const Terrain: React.FC = () => {
                                     title="Sélectionner un projet"
                                     className="bg-transparent border-none text-[11px] font-bold uppercase tracking-tight outline-none cursor-pointer px-3 py-1 text-blue-600"
                                 >
-                                    {projects.map(p => (
+                                    {(projects || []).map(p => (
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
@@ -557,9 +724,6 @@ const Terrain: React.FC = () => {
                                 <div className="flex items-center gap-1.5">
                                     <button onClick={() => setMapZoom(prev => Math.min(prev + 1, 20))} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-slate-500 hover:text-blue-600 transition-all" title="Zoom +"><Plus size={14} /></button>
                                     <button onClick={() => setMapZoom(prev => Math.max(prev - 1, 1))} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-slate-500 hover:text-blue-600 transition-all" title="Zoom -"><Search size={14} className="scale-75 translate-y-0.5" /></button>
-                                    <div className="w-px h-4 bg-gray-100 dark:bg-white/5 mx-1" />
-                                    <button onClick={handleRecenter} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-slate-500 hover:text-blue-600 transition-all" title="Recentrer"><Focus size={14} /></button>
-                                    <button onClick={handleLocate} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-slate-500 hover:text-blue-600 transition-all" title="Ma position"><Navigation size={14} /></button>
                                     <div className="w-px h-4 bg-gray-100 dark:bg-white/5 mx-1" />
                                     <button
                                         onClick={() => setIsMeasuring(!isMeasuring)}
@@ -637,10 +801,11 @@ const Terrain: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={handleRecenterOnUser}
-                                            className={`p-2 rounded-lg transition-all hover:bg-white dark:hover:bg-white/10 ${userLocation ? 'text-blue-500' : 'text-slate-400'}`}
-                                            title="Ma position actuelle"
+                                            disabled={requestingGeolocation}
+                                            className={`p-2 rounded-lg transition-all hover:bg-white dark:hover:bg-white/10 disabled:opacity-50 ${requestingGeolocation ? 'text-amber-500 animate-spin' : userLocation ? 'text-blue-500' : 'text-slate-400'}`}
+                                            title={requestingGeolocation ? "Localisation en cours..." : geolocationError ? "Cliquez pour redemander la permission" : "Ma position actuelle"}
                                         >
-                                            <Navigation size={14} />
+                                            {requestingGeolocation ? <Loader2 size={14} className="animate-spin" /> : <Navigation size={14} />}
                                         </button>
                                     </div>
                                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isOfflineMode ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-emerald-500/10 border-emerald-500 text-emerald-500'}`}>
@@ -680,9 +845,17 @@ const Terrain: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-4 shrink-0">
-                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded-md">
-                                {filteredHouseholds.length} POINTS VISIBLES
+                            <span className={`text-[9px] font-black px-2 py-1 rounded-md ${filteredHouseholds.length > 5000 ? 'text-red-600 bg-red-50 dark:bg-red-500/10' : 'text-blue-600 bg-blue-50 dark:bg-blue-500/10'}`}>
+                                {filteredHouseholds.length} POINTS {filteredHouseholds.length > 5000 ? '⚠️ NOMBREUX' : 'VISIBLES'}
                             </span>
+                            {showCoordWarning && householdStats.withoutCoords > 0 && (
+                                <div 
+                                    className="text-[8px] font-black px-2 py-1 rounded-md bg-orange-50 dark:bg-orange-500/10 text-orange-600 cursor-help"
+                                    title={`${householdStats.withoutCoords} ménages n'ont pas de coordonnées GPS valides et ne s'affichent pas sur la carte`}
+                                >
+                                    ⚠️ {householdStats.withoutCoords} SEM. SANS GPS ({((householdStats.withoutCoords/householdStats.total)*100).toFixed(0)}%)
+                                </div>
+                            )}
                             <div className="flex items-center gap-1">
                                 <button onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')} className="p-2 text-slate-400 hover:text-blue-600 transition-colors" title="Plein Écran">
                                     <Maximize size={16} />
@@ -704,45 +877,51 @@ const Terrain: React.FC = () => {
                                     exit={{ opacity: 0 }}
                                     className={`h-full w-full map-container relative`}
                                 >
-                                    <MapComponent
-                                        households={filteredHouseholds}
-                                        onSelect={setSelectedHousehold}
-                                        center={mapCenter}
-                                        zoom={mapZoom}
-                                        onMove={(c, z) => {
-                                            setMapCenter(c);
-                                            setMapZoom(z);
-                                        }}
-                                        showHeatmap={showHeatmap}
-                                        routingEnabled={routingEnabled}
-                                        onRoutingClose={() => setRoutingEnabled(false)}
-                                        showZones={showZones}
-                                        showLegend={visibleWidgets.legend}
-                                        activeHouseholdId={selectedHousehold?.id}
-                                        routingStart={routingStart}
-                                        routingDest={routingDest}
-                                        onToggleStatus={handleTogglePhase}
-                                        onZoneClick={handleZoneClick}
-                                        selectedPhases={selectedPhases}
-                                        userLocation={userLocation}
-                                        onHouseholdDrop={updateHouseholdLocation}
-                                        grappesConfig={grappesConfig}
-                                        readOnly={!peutModifierCarte}
-                                        isMeasuring={isMeasuring}
-                                        showDatabaseStats={showDatabaseStats}
-                                        mapStyle={mapStyle}
-                                        grappeZonesData={grappeZonesData}
-                                        grappeCentroidsData={grappeCentroidsData}
-                                        activeGrappeId={activeGrappeId}
-                                        onRouteFound={handleRouteFound}
-                                        favorites={localFavorites}
-                                    />
+                                    <Suspense fallback={<div className="h-full w-full flex items-center justify-center">Chargement de la carte…</div>}>
+                                        <MapComponent
+                                            households={filteredHouseholds}
+                                            onSelect={setSelectedHousehold}
+                                            center={mapCenter}
+                                            zoom={mapZoom}
+                                            onMove={(c, z) => {
+                                                setMapCenter(c);
+                                                setMapZoom(z);
+                                            }}
+                                            showHeatmap={showHeatmap}
+                                            routingEnabled={routingEnabled}
+                                            onRoutingClose={() => setRoutingEnabled(false)}
+                                            showZones={showZones}
+                                            showLegend={visibleWidgets.legend}
+                                            activeHouseholdId={selectedHousehold?.id}
+                                            routingStart={routingStart}
+                                            routingDest={routingDest}
+                                            onToggleStatus={handleTogglePhase}
+                                            onZoneClick={handleZoneClick}
+                                            selectedPhases={selectedPhases}
+                                            userLocation={userLocation}
+                                            onHouseholdDrop={updateHouseholdLocation}
+                                            grappesConfig={grappesConfig}
+                                            readOnly={!peutModifierCarte}
+                                            isMeasuring={isMeasuring}
+                                            showDatabaseStats={showDatabaseStats}
+                                            mapStyle={mapStyle}
+                                            grappeZonesData={grappeZonesData}
+                                            grappeCentroidsData={grappeCentroidsData}
+                                            activeGrappeId={activeGrappeId}
+                                            onRouteFound={handleRouteFound}
+                                            favorites={localFavorites}
+                                            projectId={project?.id}
+                                        />
+                                    </Suspense>
                                     {/* Routing Panel Overlay */}
                                     {showRoutingPanel && (
                                         <MapRoutingPanel
                                             households={filteredHouseholds}
                                             isDarkMode={isDarkMode}
                                             onClose={() => setShowRoutingPanel(false)}
+                                            turnByTurnInstructions={turnByTurnInstructions}
+                                            routeDistance={routeStats?.distance}
+                                            routeDuration={routeStats?.duration}
                                         />
                                     )}
                                     {/* Geofencing Alert Overlay */}
@@ -862,13 +1041,15 @@ const Terrain: React.FC = () => {
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${getHouseholdDerivedStatus(h) === 'Contrôle conforme' || getHouseholdDerivedStatus(h) === 'Intérieur terminé' ? 'bg-emerald-500/10 text-emerald-500' :
-                                                                getHouseholdDerivedStatus(h) === 'Non conforme' ? 'bg-rose-500/10 text-rose-500' :
-                                                                    getHouseholdDerivedStatus(h) === 'Non encore commencé' ? 'bg-slate-500/10 text-slate-500' :
-                                                                        'bg-indigo-500/10 text-indigo-500'
-                                                                }`}>
-                                                                {getHouseholdDerivedStatus(h)}
-                                                            </span>
+                                                            {(() => {
+                                                                const status = getHouseholdDerivedStatus(h);
+                                                                const colors = getStatusTailwindClasses(status);
+                                                                return (
+                                                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${colors.bg} ${colors.text}`}>
+                                                                        {status}
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
                                                             <button
@@ -890,192 +1071,29 @@ const Terrain: React.FC = () => {
 
                     <AnimatePresence>
                         {selectedHousehold && (
-                            <motion.div
-                                initial={{ y: '100%' }}
-                                animate={{ y: 0 }}
-                                exit={{ y: '100%' }}
-                                className={`fixed bottom-0 md:top-0 md:right-0 h-[85vh] md:h-full w-full md:w-[450px] z-[2000] shadow-[-20px_0_50px_rgba(0,0,0,0.2)] p-6 md:p-8 border-t md:border-l rounded-t-[2.5rem] md:rounded-none overflow-y-auto transition-colors ${isDarkMode ? 'bg-slate-950 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-                            >
-                                <div className="md:hidden w-12 h-1.5 bg-slate-300 dark:bg-slate-800 rounded-full mx-auto mb-6" />
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex flex-col">
-                                        <h2 className="text-xl font-black italic uppercase tracking-tighter leading-none">Ménage {selectedHousehold.id.slice(-6)}</h2>
-                                        <button
-                                            onClick={() => {
-                                                if (selectedHousehold) {
-                                                    navigator.clipboard.writeText(selectedHousehold.id);
-                                                    toast.success("ID copié !");
-                                                }
-                                            }}
-                                            className="text-[9px] font-black text-primary uppercase tracking-widest mt-1 hover:underline text-left"
-                                        >
-                                            Copier l'identifiant complet
-                                        </button>
-                                    </div>
-                                    <button onClick={() => { setSelectedHousehold(null); setRouteStats(null); setRoutingEnabled(false); }} title="Fermer" className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-900'}`}>
-                                        <X size={20} />
-                                    </button>
-                                </div>
-
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                            <Maximize size={12} /> Galerie de Photos
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {selectedHousehold.photo ? (
-                                                <button
-                                                    onClick={() => {
-                                                        const photos = [
-                                                            { url: selectedHousehold.photo!, label: 'Photo Ménage' },
-                                                            ...(selectedHousehold.compteurPhoto ? [{ url: selectedHousehold.compteurPhoto, label: 'Photo Compteur' }] : [])
-                                                        ];
-                                                        setLightboxPhotos(photos);
-                                                        setLightboxIndex(0);
-                                                    }}
-                                                    className={`aspect-square sm:aspect-video rounded-2xl overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity hover:ring-2 hover:ring-indigo-500 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
-                                                >
-                                                    <img
-                                                        src={selectedHousehold.photo}
-                                                        alt={`Ménage ${selectedHousehold.id}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </button>
-                                            ) : (
-                                                <div className={`aspect-square sm:aspect-video rounded-2xl overflow-hidden border flex items-center justify-center p-4 text-center ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                                                    <div className="flex flex-col items-center gap-2">
-                                                        <MapPin size={16} />
-                                                        <span className="text-[9px] font-bold uppercase">Aucune photo</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {selectedHousehold.compteurPhoto ? (
-                                                <button
-                                                    onClick={() => {
-                                                        const photos = [
-                                                            ...(selectedHousehold.photo ? [{ url: selectedHousehold.photo, label: 'Photo Ménage' }] : []),
-                                                            { url: selectedHousehold.compteurPhoto!, label: 'Photo Compteur' }
-                                                        ];
-                                                        setLightboxPhotos(photos);
-                                                        setLightboxIndex(selectedHousehold.photo ? 1 : 0);
-                                                    }}
-                                                    className={`aspect-square sm:aspect-video rounded-2xl overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity hover:ring-2 hover:ring-indigo-500 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
-                                                >
-                                                    <img
-                                                        src={selectedHousehold.compteurPhoto}
-                                                        alt={`Compteur ${selectedHousehold.id}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </button>
-                                            ) : (
-                                                <div className={`aspect-square sm:aspect-video rounded-2xl overflow-hidden border border-dashed flex items-center justify-center p-4 text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800 text-slate-700' : 'bg-slate-50 border-slate-200 text-slate-300'}`}>
-                                                    <span className="text-[9px] font-bold uppercase">Compteur<br />En attente</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className={`p-6 rounded-3xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-100'}`}>
-                                        <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center border border-primary/20 relative group">
-                                            <MapPin size={24} />
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); toggleFavorite(selectedHousehold.id); }}
-                                                className={`absolute -top-2 -right-2 p-1.5 rounded-full border shadow-sm transition-all hover:scale-110 active:scale-90 ${isFavorite(selectedHousehold.id) ? 'bg-amber-100 border-amber-200 text-amber-500' : 'bg-white border-slate-100 text-slate-300'}`}
-                                                title={isFavorite(selectedHousehold.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
-                                            >
-                                                <Star size={12} fill={isFavorite(selectedHousehold.id) ? "currentColor" : "none"} />
-                                            </button>
-                                        </div>
-                                        <div>
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Propriétaire / Chef</p>
-                                            <p className="text-primary font-black text-xs uppercase tracking-tight">{selectedHousehold.owner || '—'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-emerald-500/10 text-emerald-500 rounded-xl flex items-center justify-center border border-emerald-500/20">
-                                            <Navigation size={18} />
-                                        </div>
-                                        <div>
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Téléphone</p>
-                                            <p className="text-emerald-500 font-black text-xs uppercase tracking-tight">
-                                                {(selectedHousehold as any).phone || (selectedHousehold as any).ownerPhone || (selectedHousehold as any).koboData?.tel || '77 000 00 00'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Région</p>
-                                            <p className="text-[10px] font-bold">{selectedHousehold.region}</p>
-                                        </div>
-                                        <div>
-                                            <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Statut Actuel</p>
-                                            <p className={`text-[10px] font-black uppercase tracking-wider ${getHouseholdDerivedStatus(selectedHousehold) === 'Contrôle conforme' || getHouseholdDerivedStatus(selectedHousehold) === 'Intérieur terminé' ? 'text-emerald-500' :
-                                                    getHouseholdDerivedStatus(selectedHousehold) === 'Non conforme' ? 'text-rose-500' :
-                                                        getHouseholdDerivedStatus(selectedHousehold) === 'Non encore commencé' ? 'text-rose-600' : 'text-primary'
-                                                }`}>
-                                                {getHouseholdDerivedStatus(selectedHousehold)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {routeStats && (
-                                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Distance Est.</p>
-                                                <p className="text-[10px] font-bold text-emerald-500">{(routeStats.distance / 1000).toFixed(1)} km</p>
-                                            </div>
-                                            <div>
-                                                <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>Temps Est.</p>
-                                                <p className="text-[10px] font-bold text-indigo-500">{Math.ceil(routeStats.duration / 60)} min</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="space-y-4">
-                                    <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                        <Calendar size={12} />
-                                        Journal d'Audit
-                                    </h4>
-                                    <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-800">
-                                        {auditLogs.length > 0 ? (
-                                            auditLogs.slice(0, 5).map((log, i) => (
-                                                <div key={i} className="pl-10 relative">
-                                                    <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-950 bg-primary" />
-                                                    <div className={`p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-50'}`}>
-                                                        <p className={`text-[10px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{log.action}</p>
-                                                        <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-[10px] text-slate-500 italic pl-10">Aucun log récent</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="pt-6 flex flex-col gap-3">
-                                    <button
-                                        onClick={handleTraceItinerary}
-                                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
-                                    >
-                                        <Navigation size={16} />
-                                        TRACER ITINÉRAIRE
-                                    </button>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => handleStatusUpdate('Terminé')}
-                                            className="flex-1 bg-primary hover:brightness-110 text-white py-4 rounded-2xl font-black text-xs transition-all shadow-lg shadow-primary/20 active:scale-95"
-                                        >
-                                            VALIDER RACCORDEMENT
-                                        </button>
-                                        <button
-                                            className={`flex-1 py-4 rounded-2xl border font-black text-xs transition-all active:scale-95 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}
-                                        >
-                                            REPORTÉ
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
+                            <HouseholdDetailsPanel
+                                household={selectedHousehold}
+                                isDarkMode={isDarkMode}
+                                onClose={() => { 
+                                    setSelectedHousehold(null); 
+                                    setRouteStats(null); 
+                                    setRoutingEnabled(false); 
+                                }}
+                                onPhotoOpen={(photos, index) => {
+                                    setLightboxPhotos(photos);
+                                    setLightboxIndex(index);
+                                }}
+                                onStatusUpdate={handleStatusUpdate}
+                                isFavorite={isFavorite}
+                                toggleFavorite={toggleFavorite}
+                                onTraceItinerary={handleTraceItinerary}
+                                routeStats={routeStats || null}
+                                grappeInfo={selectedHousehold.grappeId ? {
+                                    id: selectedHousehold.grappeId,
+                                    name: selectedHousehold.grappeName || `Grappe ${selectedHousehold.grappeId}`,
+                                    count: (households || []).filter((h: Household) => h.grappeId === selectedHousehold.grappeId).length
+                                } : undefined}
+                            />
                         )}
                     </AnimatePresence>
                 </div>
@@ -1103,7 +1121,7 @@ const Terrain: React.FC = () => {
 
                                 const newRegions = [...downloadedRegions, region.id];
                                 setDownloadedRegions(newRegions);
-                                localStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
+                                safeStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
                                 toast.success(`Région ${region.name} téléchargée !`);
                             } catch (e) {
                                 toast.error("Erreur lors du téléchargement");
@@ -1114,7 +1132,7 @@ const Terrain: React.FC = () => {
                         onRemove={(id) => {
                             const newRegions = downloadedRegions.filter(r => r !== id);
                             setDownloadedRegions(newRegions);
-                            localStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
+                            safeStorage.setItem('downloaded_regions', JSON.stringify(newRegions));
                             toast.success("Région supprimée du cache");
                         }}
                     />

@@ -22,6 +22,8 @@ import Layout from './layouts/Layout';
 import SessionWarningToast from './components/SessionWarningToast';
 import OfflineBanner from './components/OfflineBanner';
 import PWAPrompt from './components/PWAPrompt';
+import SyncNotification from './components/SyncNotification';
+import { MemoryDiagnostic } from './components/MemoryDiagnostic';
 import { Toaster } from 'react-hot-toast';
 import { useOfflineSync } from './hooks/useOfflineSync';
 
@@ -40,6 +42,7 @@ const RoleRoute = ({ children, allowedRoles }: { children: React.ReactNode, allo
 };
 
 function App() {
+  // Always call useOfflineSync - it handles the case when user is not authenticated internally
   useOfflineSync();
 
   return (
@@ -195,6 +198,8 @@ function App() {
       <SessionWarningToast />
       <OfflineBanner />
       <PWAPrompt />
+      <MemoryDiagnostic />
+      <SyncNotification />
       <Toaster position="bottom-right" reverseOrder={false} />
     </Router>
   );

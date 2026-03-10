@@ -1,8 +1,71 @@
 import { useState, useMemo, useCallback } from 'react';
+import * as safeStorage from '../utils/safeStorage';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../store/db';
 import type { Household } from '../utils/types';
 import { useProject } from './useProject';
+import logger from '../utils/logger';
+
+// 🔧 Fonction pour normaliser les coordonnées GPS (convertir virgules en points)
+const normalizeCoordinates = (household: any): Household => {
+    if (!household) return household;
+    
+    try {
+        // Vérifier si location existe et a les bonnes propriétés
+        if (!household.location || !household.location.coordinates) {
+            return household;
+        }
+
+        const coordinates = household.location.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length !== 2) {
+            return household;
+        }
+
+        const [lon, lat] = coordinates;
+        
+        // Convertir en nombres si ce sont des strings avec virgules
+        let normalizedLon: number;
+        let normalizedLat: number;
+        
+        if (typeof lon === 'string') {
+            normalizedLon = parseFloat((lon as string).replace(',', '.'));
+        } else if (typeof lon === 'number') {
+            normalizedLon = lon;
+        } else {
+            return household;
+        }
+
+        if (typeof lat === 'string') {
+            normalizedLat = parseFloat((lat as string).replace(',', '.'));
+        } else if (typeof lat === 'number') {
+            normalizedLat = lat;
+        } else {
+            return household;
+        }
+
+        // Valider les plages
+        if (isNaN(normalizedLon) || isNaN(normalizedLat)) {
+            return household;
+        }
+
+        if (Math.abs(normalizedLon) > 180 || Math.abs(normalizedLat) > 90) {
+            logger.warn(`⚠️ Coordonnées hors limites pour ${household.id}: [${normalizedLon}, ${normalizedLat}]`);
+            return household;
+        }
+
+        return {
+            ...household,
+            location: {
+                ...household.location,
+                coordinates: [normalizedLon, normalizedLat] as [number, number]
+            }
+        } as Household;
+    } catch (e) {
+        // Si une erreur survient, retourner l'original sans modifier
+        logger.warn(`❌ Erreur normalisation coords pour ${household?.id}:`, e);
+        return household;
+    }
+};
 
 export function useTerrainData() {
     const { activeProjectId } = useProject();
@@ -15,7 +78,10 @@ export function useTerrainData() {
         let collection = db.households.where('projectId').equals(activeProjectId);
         const all = await collection.toArray();
 
-        return all.filter(h => {
+        // 🔧 Normaliser les coordonnées de tous les ménages
+        const normalized = all.map(h => normalizeCoordinates(h as Household));
+
+        return normalized.filter(h => {
             const matchesSearch = searchTerm === '' ||
                 h.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (h as any).owner?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -118,7 +184,7 @@ export function useTerrainData() {
         // Trigger an API call to update the backend PostGIS layer
         try {
             const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5005').replace(/\/api$/, '');
-            const token = localStorage.getItem('access_token');
+            const token = safeStorage.getItem('access_token');
             await fetch(`${apiUrl}/api/households/${id}`, {
                 method: 'PATCH',
                 headers: {
@@ -130,12 +196,54 @@ export function useTerrainData() {
                 })
             });
         } catch (e) {
-            console.error('Failed to sync location to backend', e);
+            logger.error('Failed to sync location to backend', e);
         }
     }, []);
 
     const importHouseholds = useCallback(async (data: Household[]) => {
-        await db.households.bulkPut(data);
+        // Fetch existing households to merge data safely (preserve location, etc.)
+        const existingHouseholds = await db.households.toArray();
+        const existingMap = new Map(existingHouseholds.map(h => [h.id, h]));
+
+        const mergedData = data.map(newItem => {
+            const existingItem = existingMap.get(newItem.id);
+            if (existingItem) {
+                return { ...existingItem, ...newItem };
+            }
+            return newItem;
+        });
+
+        await db.households.bulkPut(mergedData);
+    }, []);
+
+    // 🔍 Détecte les doublons AVANT import avec rapport détaillé
+    const detectDuplicates = useCallback(async (data: Household[]) => {
+        const existingHouseholds = await db.households.toArray();
+        const existingMap = new Map(existingHouseholds.map(h => [h.id, h]));
+
+        const stats = {
+            totalNew: data.length,
+            newItems: 0,
+            duplicates: 0,
+            updates: 0,
+            duplicateIds: [] as string[]
+        };
+
+        data.forEach(newItem => {
+            if (existingMap.has(newItem.id)) {
+                stats.duplicates++;
+                stats.duplicateIds.push(newItem.id);
+                // Check if there are actual changes
+                const existing = existingMap.get(newItem.id)!;
+                if (JSON.stringify(existing) !== JSON.stringify(newItem)) {
+                    stats.updates++;
+                }
+            } else {
+                stats.newItems++;
+            }
+        });
+
+        return stats;
     }, []);
 
     const clearHouseholds = useCallback(async () => {
@@ -197,6 +305,7 @@ export function useTerrainData() {
         updateHouseholdStatus,
         updateHouseholdLocation,
         importHouseholds,
+        detectDuplicates,
         clearHouseholds,
         simulateKoboSync,
         getHouseholdLogs

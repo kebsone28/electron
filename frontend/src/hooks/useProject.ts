@@ -4,9 +4,10 @@ import type { Project } from '../utils/types';
 import apiClient from '../api/client';
 
 import { useState, useEffect } from 'react';
+import * as safeStorage from '../utils/safeStorage';
 
 export function useProject() {
-    const [activeProjectId, setActiveProjectIdState] = useState<string | null>(localStorage.getItem('active_project_id'));
+    const [activeProjectId, setActiveProjectIdState] = useState<string | null>(safeStorage.getItem('active_project_id'));
 
     const projects = useLiveQuery(() => db.projects.toArray()) || [];
 
@@ -24,13 +25,13 @@ export function useProject() {
         if (!activeProjectId && projects.length > 0) {
             const id = projects[0].id;
             setActiveProjectIdState(id);
-            localStorage.setItem('active_project_id', id);
+            safeStorage.setItem('active_project_id', id);
         }
     }, [projects, activeProjectId]);
 
     const setActiveProjectId = (id: string) => {
         setActiveProjectIdState(id);
-        localStorage.setItem('active_project_id', id);
+        safeStorage.setItem('active_project_id', id);
     };
 
     const createProject = async (name: string) => {
@@ -79,7 +80,7 @@ export function useProject() {
                 setActiveProjectId(remaining[0].id);
             } else {
                 setActiveProjectIdState(null);
-                localStorage.removeItem('active_project_id');
+                safeStorage.removeItem('active_project_id');
             }
         }
         return { success: true };

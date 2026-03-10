@@ -34,8 +34,9 @@ export const getPerformanceStats = async (req, res) => {
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         let dailyStats = [];
+        let dailyYield = [0, 0, 0, 0, 0, 0, 0];
         try {
-            dailyStats = await prisma.auditLog.findMany({
+            const logs = await prisma.auditLog.findMany({
                 where: {
                     organizationId,
                     timestamp: { gte: sevenDaysAgo }
@@ -47,12 +48,21 @@ export const getPerformanceStats = async (req, res) => {
                 take: 200,
                 orderBy: { timestamp: 'desc' }
             });
+            dailyStats = logs;
+            const now = new Date();
+            logs.forEach(log => {
+                const diffTime = Math.abs(now.getTime() - new Date(log.timestamp).getTime());
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays >= 0 && diffDays < 7) {
+                    dailyYield[6 - diffDays]++;
+                }
+            });
         } catch (auditErr) {
             // auditLog may not be available – not critical
             console.warn('[MONITORING] Impossible de lire auditLog:', auditErr.message);
         }
 
-        res.json({ stats, dailyStats });
+        res.json({ stats, dailyStats, dailyYield });
     } catch (error) {
         console.error('Error fetching performance stats:', error.message);
         res.status(500).json({ error: 'Server error', details: error.message });

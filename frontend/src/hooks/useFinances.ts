@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../store/db';
 import type { Team, Project, Household } from '../utils/types';
+import * as safeStorage from '../utils/safeStorage';
 
 export interface DevisItem {
     id: string;
@@ -29,7 +30,7 @@ export const DEVIS_ITEMS: DevisItem[] = [
 const DEVIS_PLAFOND = 300823750;
 
 export function useFinances() {
-    const activeProjectId = localStorage.getItem('active_project_id');
+    const activeProjectId = safeStorage.getItem('active_project_id');
     const projects = useLiveQuery(() => db.projects.toArray()) as Project[] | undefined;
 
     // Find the actual active project object from the list

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import * as safeStorage from '../utils/safeStorage';
 import {
     ClipboardList,
     Trash2,
@@ -26,6 +27,7 @@ import { generateMissionOrderWord, generateMissionReportWord } from '../services
 import type { MissionOrderData, MissionMember } from '../services/missionOrderGenerator';
 import { db } from '../store/db';
 import SignatureModal from '../components/common/SignatureModal';
+import logger from '../utils/logger';
 
 const DEFAULT_PLANNING_STEPS = [
     "Jour 1 : Dakar ➔ Tambacounda (Mise en route)\n• Matin : Départ 06h00 de Dakar.\n• Après-midi : Trajet Dakar-Tamba.\n• Soir : Réunion de cadrage initiale avec l'entrepreneur principal de Tamba.",
@@ -34,7 +36,7 @@ const DEFAULT_PLANNING_STEPS = [
 ];
 
 export default function MissionOrder() {
-    const activeProjectId = localStorage.getItem('active_project_id');
+    const activeProjectId = safeStorage.getItem('active_project_id');
     const [currentMissionId, setCurrentMissionId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'prep' | 'report'>('prep');
 
@@ -115,9 +117,9 @@ export default function MissionOrder() {
         try {
             await db.missions.put(missionData);
             if (!currentMissionId) setCurrentMissionId(missionData.id);
-            console.log("Mission sauvegardée localement");
+            logger.log("Mission sauvegardée localement");
         } catch (err) {
-            console.error(err);
+            logger.error(err);
         }
     };
 
@@ -215,7 +217,7 @@ export default function MissionOrder() {
                 alert("Frais de mission synchronisés avec la comptabilité du projet !");
             }
         } catch (error) {
-            console.error(error);
+            logger.error(error);
         } finally {
             setIsSyncing(false);
         }

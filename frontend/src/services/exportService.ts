@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import logger from '../utils/logger';
 
 export interface ExportOptions {
     filename?: string;
@@ -11,7 +12,7 @@ export interface ExportOptions {
 export const exportToPDF = async (elementId: string, options: ExportOptions) => {
     const element = document.getElementById(elementId);
     if (!element) {
-        console.error(`Element with id ${elementId} not found`);
+        logger.error(`Element with id ${elementId} not found`);
         return;
     }
 
@@ -93,7 +94,7 @@ export const exportToPDF = async (elementId: string, options: ExportOptions) => 
         pdf.save(`${options.filename || 'rapport'}_${Date.now()}.pdf`);
         return true;
     } catch (error) {
-        console.error('Export error:', error);
+        logger.error('Export error:', error);
         return false;
     }
 };

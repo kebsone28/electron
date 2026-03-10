@@ -6,6 +6,7 @@ export interface Project {
     name: string;
     status: string;
     version: number;
+    config?: Record<string, any>;
     deletedAt?: Date | null;
 }
 
@@ -46,7 +47,8 @@ export interface AppSecurity {
 export class ProquelecDatabase extends Dexie {
     organizations!: Table<{ id: string; name: string }>;
     users!: Table<any>;
-    projects!: Table<any>;
+    /** projects stored locally using the Project interface above */
+    projects!: Table<Project>;
     zones!: Table<any>;
     households!: Table<any>;
     teams!: Table<any>;

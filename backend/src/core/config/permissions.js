@@ -28,7 +28,8 @@ export const PERMISSIONS = {
     CREER_PROJET: "creer_projet",
     SUPPRIMER_PROJET: "supprimer_projet",
     GERER_LOGISTIQUE: "gerer_logistique",
-    VOIR_RAPPORTS: "voir_rapports"
+    VOIR_RAPPORTS: "voir_rapports",
+    ACCES_TERMINAL_KOBO: "acces_terminal_kobo"
 };
 
 export const ROLE_PERMISSIONS = {
@@ -45,7 +46,8 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.CREER_PROJET,
         PERMISSIONS.SUPPRIMER_PROJET,
         PERMISSIONS.GERER_LOGISTIQUE,
-        PERMISSIONS.VOIR_RAPPORTS
+        PERMISSIONS.VOIR_RAPPORTS,
+        PERMISSIONS.ACCES_TERMINAL_KOBO
     ],
 
     [ROLES.DG]: [
@@ -53,7 +55,8 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VOIR_SIMULATION,
         PERMISSIONS.VOIR_CARTE,
         PERMISSIONS.GERER_LOGISTIQUE,
-        PERMISSIONS.VOIR_RAPPORTS
+        PERMISSIONS.VOIR_RAPPORTS,
+        PERMISSIONS.ACCES_TERMINAL_KOBO
     ],
 
     [ROLES.CHEF_EQUIPE]: [

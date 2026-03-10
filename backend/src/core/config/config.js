@@ -26,8 +26,8 @@ export const config = {
         origin: process.env.CORS_ORIGIN
             ? process.env.CORS_ORIGIN.split(',')
                 .map(o => o.trim())
-                .map(o => (o !== '*' && !o.startsWith('http')) ? `https://${o}` : o)
-            : '*'
+                .map(o => (o !== '*' && !o.startsWith('http')) ? `http://${o}` : o)
+            : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175']
     },
     sentry: {
         dsn: process.env.SENTRY_DSN

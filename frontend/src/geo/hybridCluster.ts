@@ -1,4 +1,5 @@
 import simplify from '@turf/simplify';
+import logger from '../utils/logger';
 import { featureCollection, polygon } from '@turf/helpers';
 import { dbscan, isochroneDbscan } from './dbscan';
 import { kmeans } from './kmeans';
@@ -110,7 +111,7 @@ export function clustersToGeoJSON(clusters: ClusterResult[]): any {
             (simplified as any).id = intId;
             collection.features.push(simplified as any);
         } catch (e) {
-            console.error("Erreur de polygon", e);
+            logger.error("Erreur de polygon", e);
         }
     });
 

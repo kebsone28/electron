@@ -30,7 +30,7 @@ interface MapComponentProps {
     onRoutingClose?: () => void;
     routingStart?: [number, number] | null;
     routingDest?: [number, number] | null;
-    onRouteFound?: (stats: { distance: number; duration: number } | null) => void;
+    onRouteFound?: (stats: { distance: number; duration: number; instructions?: any[] } | null) => void;
     userLocation?: [number, number] | null;
     readOnly?: boolean;
     isMeasuring?: boolean;
@@ -42,6 +42,7 @@ interface MapComponentProps {
     onHouseholdDrop?: (id: string, lat: number, lng: number) => void;
     onMove?: (center: [number, number], zoom: number) => void;
     favorites?: any[];
+    projectId?: string;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
@@ -49,6 +50,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     onSelect,
     center,
     zoom,
+    onMove,
     showHeatmap = false,
     selectedPhases = [],
     onToggleStatus,
@@ -56,6 +58,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
     showZones = false,
     onZoneClick,
     grappesConfig,
+    routingEnabled,
+    routingStart,
+    routingDest,
+    onRouteFound,
+    userLocation,
     readOnly = false,
     isMeasuring = false,
     showDatabaseStats = false,
@@ -63,14 +70,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
     grappeZonesData,
     grappeCentroidsData,
     activeGrappeId,
-    userLocation,
     onHouseholdDrop,
-    onMove,
-    routingEnabled,
-    routingStart,
-    routingDest,
-    onRouteFound,
-    favorites = []
+    favorites = [],
+    projectId
 }) => {
     return (
         <div className="h-full w-full relative bg-slate-100 dark:bg-slate-900 overflow-hidden">
@@ -99,6 +101,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 routingDest={routingDest}
                 onRouteFound={onRouteFound}
                 favorites={favorites}
+                projectId={projectId}
             />
 
             {showDatabaseStats && <MapStatsWidget stats={{

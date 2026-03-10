@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 export async function getTravelTimeMatrix(coords: { lat: number, lon: number }[]): Promise<number[][] | null> {
     if (coords.length < 2 || coords.length > 2000) return null; // Limite raisonnable pour la matrice
 
@@ -16,7 +18,7 @@ export async function getTravelTimeMatrix(coords: { lat: number, lon: number }[]
         }
         return null;
     } catch (error) {
-        console.warn("OSRM backend unavailable or error:", error);
+        logger.warn("OSRM backend unavailable or error:", error);
         return null;
     }
 }

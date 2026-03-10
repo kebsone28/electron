@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { exportCahiersToWord } from '../utils/exportWord';
+import * as safeStorage from '../utils/safeStorage';
 import './Cahier.css';
 
 const DEFAULT_TASK_LIBRARY = {
@@ -116,12 +117,12 @@ export default function Cahier() {
     // Load local overrides or fallback to default
     const [customLibrary, setCustomLibrary] = useState(() => {
         try {
-            const saved = localStorage.getItem('gem_cahier_library');
+            const saved = safeStorage.getItem('gem_cahier_library');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Si la librairie sauvegardée n'a pas les nouvelles clés ou n'a pas les images, on force l'abandon 
                 if (!parsed['Installation Intérieure'] || !parsed['Préparateur'] || !parsed['Préparateur'].image) {
-                    localStorage.removeItem('gem_cahier_library');
+                    safeStorage.removeItem('gem_cahier_library');
                     return DEFAULT_TASK_LIBRARY;
                 }
                 // JSON.parse destroys React component refs (icons), so we restore them from the default library
@@ -167,7 +168,7 @@ export default function Cahier() {
             hse: editHse.split('\n').filter(Boolean)
         };
         setCustomLibrary(updatedLibrary);
-        localStorage.setItem('gem_cahier_library', JSON.stringify(updatedLibrary));
+        safeStorage.setItem('gem_cahier_library', JSON.stringify(updatedLibrary));
         setIsEditing(false);
     };
 

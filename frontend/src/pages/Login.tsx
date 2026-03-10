@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
+import logger from '../utils/logger';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, User, Lock, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
 import type { User as DBUser } from '../utils/types';
+import { trackRender } from '../utils/debugHelper';
 
 
 type LoginStep = 'credentials' | '2fa' | 'recovery';
@@ -28,33 +30,50 @@ export default function Login() {
     const [recSecAns, setRecSecAns] = useState('');
     const [recoveryInfo, setRecoveryInfo] = useState('');
 
+    // Track renders in development
+    useEffect(() => {
+        trackRender('Login');
+    });
+
     const handleCredentials = async (e: FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
 
         try {
-            const { data } = await apiClient.post('/auth/login', {
+            const response = await apiClient.post('/auth/login', {
                 email: username.trim(),
                 password: password
             });
 
-            const { user, accessToken } = data;
+            const { accessToken, user: userPayload } = response.data;
+            // copy only the minimal fields we need to avoid retaining a potentially large object
+            const emailResp = userPayload?.email || '';
+            const roleResp = userPayload?.role || '';
+            const nameResp = userPayload?.name || '';
+            const orgResp = userPayload?.organization;
+            const idResp = userPayload?.id;
+            const requires2FA = userPayload?.requires2FA;
 
-            if (user.requires2FA) {
+            if (requires2FA) {
                 setPendingUser({
-                    ...user,
-                    accessToken,
+                    email: emailResp,
+                    role: roleResp,
+                    name: nameResp,
+                    organization: orgResp,
+                    id: idResp,
+                    requires2FA,
+                    accessToken
                 } as any);
                 setStep('2fa');
                 setLoading(false);
                 return;
             }
 
-            login(user.email, user.role, user.name, user.organization, user.id, accessToken);
+            login(emailResp, roleResp, nameResp, orgResp, idResp, accessToken);
             navigate('/dashboard');
         } catch (err: any) {
-            console.error('Login error:', err);
+            logger.error('Login error:', err);
             // Supprimé: handleCreateProject n'est plus utilisé ici (géré par DataHubModal ou Admin)
             setError(err.response?.data?.error || 'Identifiant ou mot de passe incorrect.');
         } finally {

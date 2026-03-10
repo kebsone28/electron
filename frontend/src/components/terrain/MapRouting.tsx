@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useMap, Polyline } from 'react-leaflet';
+import logger from '../../utils/logger';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Navigation, Info, Car, Footprints } from 'lucide-react';
@@ -86,7 +87,7 @@ export const MapRouting: React.FC<MapRoutingProps> = ({ enabled, onClose, startP
                 map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
             }
         } catch (e) {
-            console.error('Routing error:', e);
+            logger.error('Routing error:', e);
         }
     };
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as safeStorage from '../utils/safeStorage';
 
 interface ThemeContextType {
     isDarkMode: boolean;
@@ -9,13 +10,13 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isDarkMode, setIsDarkMode] = useState(() => {
-        const saved = localStorage.getItem('theme');
+        const saved = safeStorage.getItem('theme');
         // Default to dark mode unless explicitly set to light
         return saved !== 'light';
     });
 
     useEffect(() => {
-        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+        safeStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
         } else {

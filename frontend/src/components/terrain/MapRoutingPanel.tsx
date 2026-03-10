@@ -8,11 +8,15 @@
 import React, { useState, useCallback } from 'react';
 import { Truck, X, ChevronDown, ChevronUp, Navigation2, Route, MapPin, Trash2, ExternalLink, Shuffle, CheckCircle2 } from 'lucide-react';
 import type { Household } from '../../utils/types';
+import { TurnByTurnInstructions, type TurnInstruction } from './TurnByTurnInstructions';
 
 interface MapRoutingPanelProps {
     households: Household[];
     isDarkMode: boolean;
     onClose: () => void;
+    turnByTurnInstructions?: TurnInstruction[];
+    routeDistance?: number;
+    routeDuration?: number;
 }
 
 function getDistanceKm(c1: [number, number], c2: [number, number]): number {
@@ -48,6 +52,9 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
     households,
     isDarkMode,
     onClose,
+    turnByTurnInstructions,
+    routeDistance,
+    routeDuration,
 }) => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isExpanded, setIsExpanded] = useState(true);
@@ -226,6 +233,18 @@ export const MapRoutingPanel: React.FC<MapRoutingPanelProps> = ({
                             >
                                 <Navigation2 size={12} /> Lancer la tournée
                             </button>
+                        </div>
+                    )}
+
+                    {/* Turn-by-Turn Instructions Panel */}
+                    {turnByTurnInstructions && turnByTurnInstructions.length > 0 && routeDistance && routeDuration && (
+                        <div className="px-4 py-3 border-t border-inherit">
+                            <TurnByTurnInstructions
+                                instructions={turnByTurnInstructions}
+                                isDarkMode={isDarkMode}
+                                totalDistance={routeDistance}
+                                totalDuration={routeDuration}
+                            />
                         </div>
                     )}
                 </>

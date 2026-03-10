@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import logger from '../utils/logger';
 import {
     Download,
     RefreshCcw,
@@ -162,7 +163,7 @@ export default function Charges() {
                                     filename: 'bilan_financier'
                                 });
                                 if (ok) {
-                                    console.log('PDF généré');
+                                    logger.log('PDF généré');
                                 }
                             }}
                             className="flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-xs hover:scale-105 transition-all shadow-xl"

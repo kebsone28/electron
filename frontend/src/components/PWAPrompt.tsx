@@ -1,14 +1,21 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import logger from '../utils/logger';
 
 export default function PWAPrompt() {
+    // avoid caching source files during development — ServiceWorker only for production builds
+    if (import.meta.env.DEV) {
+        logger.log('💎 [PWA] Skipping SW registration in dev mode');
+        return null;
+    }
+
     const sw: any = useRegisterSW({
         onRegistered(r: ServiceWorkerRegistration | undefined) {
-            console.log('💎 [PWA] SW Registered: ', r);
+            logger.log('💎 [PWA] SW Registered: ', r);
         },
         onRegisterError(error: any) {
-            console.log('❌ [PWA] SW registration error', error);
+            logger.error('❌ [PWA] SW registration error', error);
         },
     });
 

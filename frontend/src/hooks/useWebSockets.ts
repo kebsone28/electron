@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
+import logger from '../utils/logger';
 
 export const useWebSockets = () => {
     const { user } = useAuth();
@@ -25,11 +26,11 @@ export const useWebSockets = () => {
         const socket = socketRef.current;
 
         socket.on('connect_error', (error) => {
-            console.error('❌ Erreur de connexion WebSocket:', error.message);
+            logger.error('❌ Erreur de connexion WebSocket:', error.message);
         });
 
         socket.on('connect', () => {
-            console.log('✅ Connecté aux WebSockets (Status: ONLINE)');
+            logger.log('✅ Connecté aux WebSockets (Status: ONLINE)');
         });
 
         // Handle generic real-time notifications
@@ -66,12 +67,12 @@ export const useWebSockets = () => {
         });
 
         socket.on('disconnect', () => {
-            console.log('🔌 Déconnecté des WebSockets');
+            logger.log('🔌 Déconnecté des WebSockets');
         });
 
         return () => {
             if (socket) {
-                console.log('🧹 Nettoyage WebSocket...');
+                logger.log('🧹 Nettoyage WebSocket...');
                 socket.off('connect');
                 socket.off('notification');
                 socket.off('disconnect');

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { db } from '../store/db';
+import logger from '../utils/logger';
+import * as safeStorage from '../utils/safeStorage';
 
 const apiClient = axios.create({
     // Use relative URL - Vite proxy forwards /api/* → http://localhost:5005/api/*
@@ -13,7 +15,7 @@ const apiClient = axios.create({
 // Request Interceptor: Add Auth Token
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('access_token');
+        const token = safeStorage.getItem('access_token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -37,14 +39,14 @@ apiClient.interceptors.response.use(
             originalRequest._retry = true;
             try {
                 // Only try refresh if we have a token (or at least we think we do)
-                const hasToken = !!localStorage.getItem('access_token');
+                const hasToken = !!safeStorage.getItem('access_token');
                 if (!hasToken) throw new Error('No token to refresh');
 
                 const { data } = await apiClient.post('/auth/refresh');
-                localStorage.setItem('access_token', data.accessToken);
+                safeStorage.setItem('access_token', data.accessToken);
                 return apiClient(originalRequest);
             } catch (refreshError) {
-                localStorage.removeItem('access_token');
+                safeStorage.removeItem('access_token');
 
                 // CRITICAL: Avoid redirection loop if already at login
                 if (!isAlreadyAtLogin) {
@@ -59,7 +61,7 @@ apiClient.interceptors.response.use(
         const isNetworkError = !error.response;
 
         if (isNetworkError && isMutation && !originalRequest.url?.includes('/auth/')) {
-            console.warn('📡 [OFFLINE] Erreur réseau détectée sur une mutation. Mise en file d\'attente...');
+            logger.warn('📡 [OFFLINE] Erreur réseau détectée sur une mutation. Mise en file d\'attente...');
 
             try {
                 await db.syncOutbox.add({
@@ -75,7 +77,7 @@ apiClient.interceptors.response.use(
                 // On renvoie une réponse "fictive" de succès pour ne pas bloquer l'UI
                 return Promise.resolve({ data: { _offline: true, message: 'Action mémorisée hors-ligne' }, status: 202 });
             } catch (dbError) {
-                console.error('❌ Impossible de mettre en file d\'attente :', dbError);
+                logger.error('❌ Impossible de mettre en file d\'attente :', dbError);
             }
         }
 

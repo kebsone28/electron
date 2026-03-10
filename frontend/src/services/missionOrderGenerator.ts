@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import logger from '../utils/logger';
 
 export interface MissionMember {
     name: string;
@@ -302,7 +303,7 @@ export const generateMissionReportPDF = async (data: MissionOrderData) => {
             // Affichage de la signature centrée sous le texte
             doc.addImage(data.signatureImage, 'PNG', 20, currentY + 2, 40, 20);
         } catch (e) {
-            console.error('Erreur lors de l\'ajout de la signature au PDF', e);
+            logger.error('Erreur lors de l\'ajout de la signature au PDF', e);
         }
     }
 
@@ -343,7 +344,7 @@ export const generateMissionReportPDF = async (data: MissionOrderData) => {
                 doc.addImage(p.photo!, 'JPEG', 14, currentY, 80, 60);
                 currentY += 70;
             } catch (err) {
-                console.error('Error adding photo to PDF', err);
+                logger.error('Error adding photo to PDF', err);
             }
         });
     }

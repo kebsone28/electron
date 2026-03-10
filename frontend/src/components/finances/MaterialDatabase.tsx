@@ -19,6 +19,7 @@ import { useProject } from '../../hooks/useProject';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import { fmtFCFA } from '../../utils/format';
+import logger from '../../utils/logger';
 
 const STANDARD_CATALOG = [
     { name: 'Poteau Béton HTA 12m/800daN', category: 'HTA', stock: 150, unitPrice: 350000 },
@@ -120,7 +121,7 @@ export default function MaterialDatabase() {
                 if (fileInputRef.current) fileInputRef.current.value = '';
                 alert("Importation et mise à jour terminées avec succès !");
             } catch (error) {
-                console.error("Erreur lors de l'import Excel:", error);
+                logger.error("Erreur lors de l'import Excel:", error);
                 alert("Erreur lors de la lecture du fichier. Vérifiez le format.");
             }
         };

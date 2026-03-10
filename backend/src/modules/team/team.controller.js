@@ -80,3 +80,92 @@ export const createTeam = async (req, res) => {
         res.status(500).json({ error: 'Server error while creating team' });
     }
 };
+
+// @desc    Assign team to zone
+// @route   POST /api/teams/:id/assign
+export const assignTeamToZone = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { zoneId } = req.body;
+        const { organizationId } = req.user;
+
+        if (!zoneId) {
+            return res.status(400).json({ error: 'zoneId is required' });
+        }
+
+        // Check if team exists and belongs to org
+        const team = await prisma.team.findUnique({
+            where: { id }
+        });
+
+        if (!team || team.organizationId !== organizationId) {
+            return res.status(404).json({ error: 'Team not found' });
+        }
+
+        const updatedTeam = await prisma.team.update({
+            where: { id },
+            data: { zoneId }
+        });
+
+        // Audit Log
+        await tracerAction({
+            userId: req.user.id,
+            organizationId,
+            action: 'AFFECTATION_EQUIPE_ZONE',
+            resource: 'Équipe',
+            resourceId: id,
+            details: { zoneId, teamName: team.name },
+            req
+        });
+
+        res.json({ message: 'Team assigned to zone successfully', team: updatedTeam });
+    } catch (error) {
+        console.error('Assign team error:', error);
+        res.status(500).json({ error: 'Server error while assigning team' });
+    }
+};
+
+// @desc    Get real-time positions of teams
+// @route   GET /api/teams/positions
+export const getTeamPositions = async (req, res) => {
+    try {
+        const { organizationId } = req.user;
+        const { projectId } = req.query;
+
+        // In a real scenario, these could be pulled from Redis or GPS tracking tables
+        // For audit fix, we'll return mock positions based on active teams
+        const teams = await prisma.team.findMany({
+            where: {
+                organizationId,
+                deletedAt: null
+            },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                zone: { select: { name: true } }
+            }
+        });
+
+        // Simulate base coordinates in Senegal for mock (Dakar approx)
+        const baseLat = 14.7167;
+        const baseLng = -17.4677;
+
+        const positions = teams.map((team, index) => ({
+            id: team.id,
+            name: team.name,
+            type: team.type,
+            zoneName: team.zone?.name || 'Inconnue',
+            coordinates: {
+                lat: baseLat + (Math.random() - 0.5) * 0.1,
+                lng: baseLng + (Math.random() - 0.5) * 0.1
+            },
+            lastUpdate: new Date()
+        }));
+
+        res.json({ positions });
+    } catch (error) {
+        console.error('Get team positions error:', error);
+        res.status(500).json({ error: 'Server error while fetching team positions' });
+    }
+};

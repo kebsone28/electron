@@ -123,7 +123,7 @@ export default function WorkshopTab() {
                             <span className="text-indigo-400">{progress}%</span>
                         </div>
                         <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                            <div className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000" style={{ width: `${progress}%` }} />
+                            <div className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000" style={{ width: `${progress}%` }} /* eslint-disable-line no-inline-styles *//>
                         </div>
                     </div>
 

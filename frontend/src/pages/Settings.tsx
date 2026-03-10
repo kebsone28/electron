@@ -13,15 +13,18 @@ import {
     Truck,
     MapPin,
     Zap,
-    ChevronRight
+    ChevronRight,
+    CloudDownload,
+    Save
 } from 'lucide-react';
 import { useProject } from '../hooks/useProject';
 import type { Team, SubTeam, CatalogItem, SubTeamEquipment } from '../utils/types';
 import { generateDynamicGrappes } from '../utils/clustering';
+import logger from '../utils/logger';
 
 import { StatusBadge } from '../components/dashboards/DashboardComponents';
 
-type TabType = 'teams' | 'costs' | 'zones' | 'logistics' | 'data';
+type TabType = 'teams' | 'costs' | 'zones' | 'logistics' | 'kobo' | 'data';
 
 interface TeamAllocation {
     id: string;
@@ -47,6 +50,7 @@ export default function Settings() {
         { id: 'costs', label: 'Tarifs', icon: DollarSign },
         { id: 'zones', label: 'Zones & Affectations', icon: Layers },
         { id: 'logistics', label: 'Dotations & Logistique', icon: Wrench },
+        { id: 'kobo', label: 'KoBo', icon: CloudDownload },
         { id: 'data', label: 'Données', icon: Database },
     ];
 
@@ -72,7 +76,7 @@ export default function Settings() {
                 {/* ── TABS NAVIGATION ── */}
                 <div className="flex gap-2 p-1.5 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 overflow-x-auto no-scrollbar shadow-sm" role="tablist">
                     {tabs.map((tab) => (
-                        <button
+                        <button // eslint-disable-line jsx-a11y/aria-proptypes
                             key={tab.id}
                             role="tab"
                             aria-selected={activeTab === tab.id}
@@ -112,6 +116,7 @@ export default function Settings() {
                                 {activeTab === 'costs' && <CostsSection project={project} onUpdate={updateProject} />}
                                 {activeTab === 'zones' && <ZonesSection project={project} onUpdate={updateProject} />}
                                 {activeTab === 'logistics' && <LogisticsSection project={project} onUpdate={updateProject} />}
+                                {activeTab === 'kobo' && <KoboSettingsSection project={project} onUpdate={updateProject} />}
                                 {activeTab === 'data' && <DataSection project={project} onUpdate={updateProject} />}
                             </div>
                         </motion.div>
@@ -920,7 +925,7 @@ function DataSection({ project, onUpdate }: { project: any, onUpdate: any }) {
             });
             alert("Grappes générées avec succès !");
         } catch (error) {
-            console.error("Erreur clustering :", error);
+            logger.error("Erreur clustering :", error);
             alert("Erreur lors de la génération des grappes.");
         }
     };
@@ -950,7 +955,7 @@ function DataSection({ project, onUpdate }: { project: any, onUpdate: any }) {
                     alert("Paramètres importés avec succès !");
                 }
             } catch (error) {
-                console.error("Erreur lors de l'import :", error);
+                logger.error("Erreur lors de l'import :", error);
                 alert("Erreur lors de la lecture du fichier de paramètres. Veuillez vérifier le format.");
             }
         };
@@ -1310,3 +1315,89 @@ function LogisticsSection({ project, onUpdate }: { project: any, onUpdate: any }
         </div>
     );
 }
+export function KoboSettingsSection({ project, onUpdate }: { project: any, onUpdate: any }) {
+    const defaultKoboConfig = {
+        token: '',
+        assetUid: ''
+    };
+
+    const koboConfig = project?.config?.kobo || defaultKoboConfig;
+    const [config, setConfig] = useState(koboConfig);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            await onUpdate({
+                config: {
+                    ...project.config,
+                    kobo: config
+                }
+            });
+            alert('Paramètres Kobo sauvegardés avec succès !');
+        } catch (error) {
+            logger.error(error);
+            alert('Erreur lors de la sauvegarde.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-12">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3 uppercase tracking-tight mb-1">
+                        <CloudDownload className="text-indigo-500" />
+                        Synchronisation KoboToolbox
+                    </h2>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Paramétrage de l'API KoBo pour l'import automatique des formulaires Terrain</p>
+                </div>
+                <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                    <Save size={16} />
+                    {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                </button>
+            </div>
+
+            <div className="bg-white dark:bg-slate-950 p-8 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-sm space-y-8">
+                <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-sm text-blue-700 dark:text-blue-400 font-medium">
+                        <p>Ces identifiants permettent à l'application de se connecter à votre compte KoboToolbox pour récupérer les réponses des enquêteurs. Le processus de synchronisation est déclenché manuellement depuis le "Data Hub" de la carte.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Token API d'Authentification</label>
+                            <input
+                                type="password"
+                                title="Token Kobo API"
+                                value={config.token}
+                                onChange={e => setConfig({ ...config, token: e.target.value })}
+                                placeholder="ex: 2e3a09a8bff3fbb3a2510dbc..."
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-2">Trouvable dans vos paramètres de compte KoboToolbox sous "API Tokens".</p>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Identifiant du Formulaire (Asset UID)</label>
+                            <input
+                                type="text"
+                                title="Asset UID Kobo"
+                                value={config.assetUid}
+                                onChange={e => setConfig({ ...config, assetUid: e.target.value })}
+                                placeholder="ex: aEYZwPujJiFBTNb6mxMGCB"
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-2">C'est la partie de l'URL Kobo lorsque vous visualisez le formulaire.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+

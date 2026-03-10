@@ -5,6 +5,7 @@ import './index.css'
 
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { SyncProvider } from './contexts/SyncContext';
 // import { seedDatabase } from './store/seed';
 
 // Initialize database with mock data if needed (only in development or if explicitly enabled)
@@ -15,9 +16,11 @@ import { AuthProvider } from './contexts/AuthContext';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
+      <SyncProvider>
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
+      </SyncProvider>
     </AuthProvider>
   </React.StrictMode>,
 );

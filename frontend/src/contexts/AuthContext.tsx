@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { User, UserRole } from '../utils/types';
+import logger from '../utils/logger';
+import * as safeStorage from '../utils/safeStorage';
 
 interface AuthContextType {
     user: User | null;
@@ -11,15 +13,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(() => {
-        const storedUser = localStorage.getItem('user');
-        const token = localStorage.getItem('access_token');
+        const storedUser = safeStorage.getItem('user');
+        const token = safeStorage.getItem('access_token');
         if (storedUser && token) {
             try {
                 return JSON.parse(storedUser);
             } catch (e) {
-                console.error('Failed to parse stored user', e);
-                localStorage.removeItem('user');
-                localStorage.removeItem('access_token');
+                logger.error('Failed to parse stored user', e);
+                safeStorage.removeItem('user');
+                safeStorage.removeItem('access_token');
                 return null;
             }
         }
@@ -36,15 +38,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         if (accessToken) {
-            localStorage.setItem('access_token', accessToken);
+            safeStorage.setItem('access_token', accessToken);
         }
-        localStorage.setItem('user', JSON.stringify(newUser));
+        safeStorage.setItem('user', JSON.stringify(newUser));
         setUser(newUser);
     };
 
     const logout = () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
+        safeStorage.removeItem('access_token');
+        safeStorage.removeItem('user');
         setUser(null);
     };
 

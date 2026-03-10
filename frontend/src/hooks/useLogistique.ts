@@ -7,7 +7,6 @@ import type { Household, Team, Project, SubGrappe } from '../utils/types';
 export function useLogistique() {
     const households = useLiveQuery(() => db.households.toArray()) as Household[] | undefined;
     const teams = useLiveQuery(() => db.teams.toArray()) as Team[] | undefined;
-    // @ts-ignore - Assuming projects table exists or use a default
     const projects = useLiveQuery(() => db.projects.toArray()) as Project[] | undefined;
     const project = projects?.[0];
 
@@ -112,16 +111,14 @@ export function useLogistique() {
         if (!newConfig.assignments) newConfig.assignments = {};
         if (!newConfig.assignments[sgId]) newConfig.assignments[sgId] = {};
         newConfig.assignments[sgId][trade] = teamIds;
-        // @ts-ignore
         await db.projects.update(project.id, { config: newConfig });
-    };
+    }; 
 
     const updateKitsLoaded = async (count: number) => {
         if (!project) return;
         const newConfig = { ...project.config };
         if (!newConfig.logistics_workshop) newConfig.logistics_workshop = {};
         newConfig.logistics_workshop.kitsLoaded = count;
-        // @ts-ignore
         await db.projects.update(project.id, { config: newConfig });
     };
 

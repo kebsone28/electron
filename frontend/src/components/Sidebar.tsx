@@ -16,7 +16,11 @@ import {
     X,
     RefreshCw,
     Activity,
-    ClipboardList
+    ClipboardList,
+    Truck,
+    DollarSign,
+    Terminal,
+    HelpCircle
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,19 +45,24 @@ export default function Sidebar() {
     const navItems: NavItem[] = [
         // STRATÉGIE
         { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de Bord', category: 'PILOTAGE' },
+        { to: '/finances', icon: DollarSign, label: 'Finances & Charges', permission: PERMISSIONS.VOIR_FINANCES, category: 'PILOTAGE' },
         { to: '/rapports', icon: BarChart3, label: 'Rapports', permission: PERMISSIONS.VOIR_RAPPORTS, category: 'PILOTAGE' },
         { to: '/simulation', icon: Calculator, label: 'Simulation', permission: PERMISSIONS.VOIR_SIMULATION, category: 'PILOTAGE' },
 
         // OPÉRATIONS TERRAIN
         { to: '/terrain', icon: MapIcon, label: 'Terrain', permission: PERMISSIONS.VOIR_CARTE, category: 'OPÉRATIONS' },
+        { to: '/logistique', icon: Truck, label: 'Logistique', permission: PERMISSIONS.GERER_LOGISTIQUE, category: 'OPÉRATIONS' },
         { to: '/admin/mission', icon: ClipboardList, label: 'Missions OM', category: 'OPÉRATIONS' },
         { to: '/bordereau', icon: Users, label: 'Bordereau', permission: PERMISSIONS.GERER_LOGISTIQUE, category: 'OPÉRATIONS' },
         { to: '/cahier', icon: FileText, label: 'Cahier de Charge', permission: PERMISSIONS.VOIR_RAPPORTS, category: 'OPÉRATIONS' },
 
         // ADMIN
         { to: '/admin/users', icon: Users, label: 'Utilisateurs', permission: PERMISSIONS.GERER_UTILISATEURS, category: 'SYSTÈME' },
+        { to: '/admin/diagnostic', icon: Activity, label: 'Diagnostic Santé', permission: PERMISSIONS.VOIR_DIAGNOSTIC, category: 'SYSTÈME' },
+        { to: '/admin/kobo-terminal', icon: Terminal, label: 'Terminal Kobo', permission: PERMISSIONS.ACCES_TERMINAL_KOBO, category: 'SYSTÈME' },
         { to: '/settings', icon: Settings, label: 'Paramètres', permission: PERMISSIONS.GERER_PARAMETRES, category: 'SYSTÈME' },
         { to: '/admin/security', icon: ShieldCheck, label: 'Sécurité', permission: PERMISSIONS.GERER_PARAMETRES, category: 'SYSTÈME' },
+        { to: '/aide', icon: HelpCircle, label: 'Centre d\'Aide', category: 'SYSTÈME' },
     ];
 
     const groupedItems = navItems.reduce((acc, item) => {

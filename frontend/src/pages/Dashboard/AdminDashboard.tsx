@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { fmtNum } from '../../utils/format';
 import { useProject } from '../../hooks/useProject';
 import { useSync } from '../../hooks/useSync';
+import logger from '../../utils/logger';
 import {
     KPICard,
     StatusBadge,
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
                     setMetrics(response.data.metrics);
                 }
             } catch (err: any) {
-                if (err.response?.status !== 401) console.error('Failed to fetch metrics', err);
+                if (err.response?.status !== 401) logger.error('Failed to fetch metrics', err);
             }
         };
         const fetchMonitoringData = async () => {
@@ -68,7 +69,7 @@ export default function AdminDashboard() {
                 setActivities(actRes.data.activities);
                 setPerfData(perfRes.data);
             } catch (err) {
-                console.error('Failed to fetch monitoring data', err);
+                logger.error('Failed to fetch monitoring data', err);
             }
         };
         fetchRemoteMetrics();
@@ -137,7 +138,10 @@ export default function AdminDashboard() {
                         <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
                     </button>
-                    <button className="flex items-center gap-2 px-5 py-2 bg-blue-600 rounded-lg text-[11px] font-bold uppercase tracking-wider text-white hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
+                    <button
+                        onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 rounded-lg text-[11px] font-bold uppercase tracking-wider text-white hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                    >
                         Centre d'Actions
                         <ArrowRight size={14} />
                     </button>
@@ -225,7 +229,7 @@ export default function AdminDashboard() {
                             <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                 <LayoutGrid size={14} className="text-blue-600" /> Flux Technique Terrain {zones.length > 0 && `(${zones.length} Zones)`}
                             </h3>
-                            <button className="text-[10px] font-bold text-blue-600 hover:underline px-3 py-1 bg-blue-50 rounded-full tracking-wider uppercase">
+                            <button onClick={() => navigate('/bordereau')} className="text-[10px] font-bold text-blue-600 hover:underline px-3 py-1 bg-blue-50 rounded-full tracking-wider uppercase">
                                 Détails par zone
                             </button>
                         </div>
@@ -288,11 +292,11 @@ export default function AdminDashboard() {
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Ménages / Jour (Moyenne)</p>
                                 <div className="w-full h-24 flex items-end justify-between px-2 gap-1">
                                     {perfData?.dailyYield?.map((h: number, i: number) => (
-                                        <div key={i} className="flex-1 bg-blue-100 rounded-t-lg group relative" style={{ height: `${h}%` }}>
+                                        <div key={i} className="flex-1 bg-blue-100 rounded-t-lg group relative" style={{ height: `${h}%` }} /* eslint-disable-line no-inline-styles */>​
                                             <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white px-1 rounded">J{i + 1}</div>
                                         </div>
                                     )) || [40, 60, 45, 75, 80, 95, 85].map((h, i) => (
-                                        <div key={i} className="flex-1 bg-blue-100 rounded-t-lg group relative" style={{ height: `${h}%` }}>
+                                        <div key={i} className="flex-1 bg-blue-100 rounded-t-lg group relative" style={{ height: `${h}%` }} /* eslint-disable-line no-inline-styles */>
                                             <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white px-1 rounded">J{i + 1}</div>
                                         </div>
                                     ))}
@@ -352,7 +356,7 @@ export default function AdminDashboard() {
                                     <p className="text-[10px] text-blue-200/60 font-medium uppercase tracking-wider">{m.startDate} au {m.endDate}</p>
                                     <div className="mt-3 flex items-center gap-2">
                                         <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                                            <div className="h-full bg-blue-400" style={{ width: '65%' }} />
+                                            <div className="h-full bg-blue-400" style={{ width: '65%' }} /* eslint-disable-line no-inline-styles *//>
                                         </div>
                                         <span className="text-[9px] font-black">65%</span>
                                     </div>

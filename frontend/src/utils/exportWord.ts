@@ -13,6 +13,8 @@ export interface ExportData {
     image?: string; // Base64 image
 }
 
+import logger from './logger';
+
 const getBase64Image = async (imgUrl: string): Promise<string | null> => {
     try {
         const response = await fetch(imgUrl);
@@ -23,7 +25,7 @@ const getBase64Image = async (imgUrl: string): Promise<string | null> => {
             reader.readAsDataURL(blob);
         });
     } catch (e) {
-        console.warn('Could not load image for export', e);
+        logger.warn('Could not load image for export', e);
         return null;
     }
 };

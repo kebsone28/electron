@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import logger from '../utils/logger';
+import * as safeStorage from '../utils/safeStorage';
 import {
     Activity,
     RefreshCw,
@@ -23,7 +25,7 @@ export default function DiagnosticSante() {
     // Local Data
     const localLogs = useLiveQuery(() => db.sync_logs.orderBy('id').reverse().limit(50).toArray()) || [];
     const patients = useLiveQuery(() => db.households.toArray()) || [];
-    const activeProjectId = localStorage.getItem('active_project_id');
+    const activeProjectId = safeStorage.getItem('active_project_id');
 
     // Filtrer les ménages par projet actif pour éviter les doublons (7072 -> 3536)
     const localHouseholds = patients.filter(h => !activeProjectId || h.projectId === activeProjectId);
@@ -35,7 +37,7 @@ export default function DiagnosticSante() {
             const { data } = await apiClient.get('/monitoring/system-health');
             setServerData(data);
         } catch (err) {
-            console.error('Failed to fetch diagnostics', err);
+            logger.error('Failed to fetch diagnostics', err);
         } finally {
             setIsLoading(false);
         }
@@ -148,7 +150,7 @@ export default function DiagnosticSante() {
                                         await db.households.clear();
                                         await db.zones.clear();
                                         await db.sync_logs.clear();
-                                        localStorage.removeItem('last_sync_timestamp');
+                                        safeStorage.removeItem('last_sync_timestamp');
                                         window.location.reload();
                                     }
                                 }}

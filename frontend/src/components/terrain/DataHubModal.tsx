@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useTerrainData } from '../../hooks/useTerrainData';
 import { useSync } from '../../hooks/useSync';
+import logger from '../../utils/logger';
 import { useTheme } from '../../context/ThemeContext';
 import { useProject } from '../../hooks/useProject';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,7 +27,7 @@ interface DataHubModalProps {
 export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) => {
     const { isDarkMode } = useTheme();
     const { user } = useAuth();
-    const { importHouseholds, clearHouseholds, stats, simulateKoboSync } = useTerrainData();
+    const { importHouseholds, detectDuplicates, clearHouseholds, stats, simulateKoboSync } = useTerrainData();
     const { activeProjectId, project, createProject } = useProject();
     const [activeTab, setActiveTab] = useState<'import' | 'kobo' | 'backups' | 'danger'>('import');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -87,7 +88,9 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                 lat: ['lat', 'latitude'],
                 lon: ['lon', 'lng', 'longitude'],
                 status: ['status', 'statut', 'etat'],
-                region: ['region', 'reg', 'province', 'departement'],
+                region: ['region', 'reg', 'province'],
+                departement: ['departement', 'dept', 'district'],
+                village: ['village', 'localite', 'commune', 'settlement'],
                 photo: ['photo', 'image', 'picture', 'file', 'media', 'lienphoto']
             };
 
@@ -139,6 +142,8 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                     const owner = findValue(household, aliases.owner) || '';
                     const phone = findValue(household, aliases.phone) || '';
                     const region = findValue(household, aliases.region) || '';
+                    const departement = findValue(household, aliases.departement) || '';
+                    const village = findValue(household, aliases.village) || '';
                     const photo = findValue(household, aliases.photo) || '';
                     const lat = parseFloatSafe(findValue(household, aliases.lat));
                     const lon = parseFloatSafe(findValue(household, aliases.lon));
@@ -152,6 +157,8 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                         photo: String(photo).trim(),
                         phone: String(phone).trim(),
                         region: String(region).trim(),
+                        departement: String(departement).trim(),
+                        village: String(village).trim(),
                         location: {
                             type: 'Point' as const,
                             coordinates: [lon, lat] as [number, number]
@@ -164,19 +171,33 @@ export const DataHubModal: React.FC<DataHubModalProps> = ({ isOpen, onClose }) =
                 return null;
             }).filter(h => h !== null);
 
-            console.log(`[IMPORT] Importing ${parsedHouseholds.length} households to zone ${targetZoneId}`);
+            logger.log(`[IMPORT] Importing ${parsedHouseholds.length} households to zone ${targetZoneId}`);
+            
+            // 🔍 Détecte les doublons AVANT import
+            const duplicateStats = await detectDuplicates(parsedHouseholds as any);
+            
+            logger.log(`[IMPORT] Duplicate stats:`, duplicateStats);
+            
+            // Importe les données
             await importHouseholds(parsedHouseholds as any);
+
+            // Message détaillé pour l'utilisateur
+            const importMessage = `✅ Import réussi pour "${project?.name || 'Nouveau'}":
+  • ${duplicateStats.newItems} nouveaux ménages ajoutés
+  • ${duplicateStats.duplicates} ménages détectés (doublons par ID)${duplicateStats.updates > 0 ? `\n  • ${duplicateStats.updates} mises à jour détectées` : ''}
+  
+Total: ${parsedHouseholds.length} ménages traités`;
+
+            alert(importMessage);
 
             // Auto-push to server
             try {
                 await sync();
             } catch (e) {
-                console.warn("Local import ok, but server sync failed", e);
+                logger.warn("Local import ok, but server sync failed", e);
             }
-
-            alert(`Import réussi pour le projet "${project?.name || 'Nouveau'}": ${parsedHouseholds.length} ménages ajoutés.`);
         } catch (err) {
-            console.error("Erreur d'import", err);
+            logger.error("Erreur d'import", err);
             alert("Erreur lors de l'import : Vérifiez le format du fichier (CSV ou Excel attendu).");
         } finally {
             setIsProcessing(false);

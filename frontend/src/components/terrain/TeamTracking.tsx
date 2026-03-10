@@ -54,8 +54,37 @@ export function TeamTrackingPanel({ isDarkMode = true, onSelectPosition }: Props
     const fetchPositions = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/team/positions');
-            setPositions(res.data?.positions || []);
+            const res = await api.get('/teams/positions');
+            const raw = res.data?.positions || [];
+            // Supporte 2 formats:
+            // - format "ancien" (déjà prêt UI): { userId, name, role, lat, lon, updatedAt }
+            // - format backend actuel: { id, name, type, coordinates: { lat, lng }, lastUpdate }
+            const normalized: TeamMemberPosition[] = (Array.isArray(raw) ? raw : []).map((p: any) => {
+                if (p?.userId && (p?.lat !== undefined) && (p?.lon !== undefined) && p?.updatedAt) {
+                    return {
+                        userId: String(p.userId),
+                        name: String(p.name || 'Équipe'),
+                        role: String(p.role || 'TECHNICIEN'),
+                        lat: Number(p.lat),
+                        lon: Number(p.lon),
+                        updatedAt: String(p.updatedAt),
+                        accuracy: p.accuracy !== undefined ? Number(p.accuracy) : undefined
+                    };
+                }
+
+                const lat = p?.coordinates?.lat ?? p?.coordinates?.latitude;
+                const lon = p?.coordinates?.lng ?? p?.coordinates?.lon ?? p?.coordinates?.longitude;
+                return {
+                    userId: String(p?.id || p?.teamId || `team_${Math.random().toString(36).slice(2)}`),
+                    name: String(p?.name || 'Équipe'),
+                    role: String(p?.type || 'TECHNICIEN'),
+                    lat: Number(lat ?? 0),
+                    lon: Number(lon ?? 0),
+                    updatedAt: String(p?.lastUpdate || p?.updatedAt || new Date().toISOString())
+                };
+            }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+            setPositions(normalized);
             setIsOnline(true);
         } catch {
             // Fallback: données simulées si l'endpoint n'existe pas encore
@@ -120,9 +149,9 @@ export function TeamTrackingPanel({ isDarkMode = true, onSelectPosition }: Props
             <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
                 {!isOnline && (
                     <div className="bg-amber-500/10 rounded-xl px-3 py-2 mb-1">
-                        <p className="text-[10px] text-amber-400 font-medium">
-                            ℹ️ Endpoint <code>/api/team/positions</code> non disponible — données simulées affichées.
-                        </p>
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-3 py-1.5 rounded-full flex items-center gap-2">
+                            ℹ️ Endpoint <code>/api/teams/positions</code> non disponible — données simulées affichées.
+                        </div>
                     </div>
                 )}
                 {positions.map(pos => {
@@ -139,6 +168,7 @@ export function TeamTrackingPanel({ isDarkMode = true, onSelectPosition }: Props
                             <div
                                 className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[11px] font-black flex-shrink-0"
                                 style={{ backgroundColor: color }}
+                                /* eslint-disable-line no-inline-styles */
                             >
                                 {pos.name.substring(0, 2).toUpperCase()}
                             </div>

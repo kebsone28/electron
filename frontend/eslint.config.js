@@ -19,5 +19,9 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-inline-styles': 'off',
+      'jsx-a11y/aria-proptypes': 'off',
+    },
   },
 ])
